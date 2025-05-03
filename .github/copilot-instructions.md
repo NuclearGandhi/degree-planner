@@ -16,7 +16,7 @@ This is a React-based degree planner application that helps students plan their 
 - Built with React 19 and TypeScript, and Vite
 - Uses @xyflow/react (ReactFlow v12) for flow visualization
 - Notice the @xyflow/react already has dark/light support using 'colorMode'.
-- Tailwind CSS for styling. Use `npm install tailwindcss @tailwindcss/vite` to install it, since we are using Vite. Since we want to use tailwind v4, the `init` command won't work anymore.
+- Tailwind CSS for styling. Use `npm install tailwindcss @tailwindcss/vite` to install it, since we are using Vite. Since we want to use tailwind v4, we don't need to use `npx tailwindcss init -p` anymore.
 - Fetches course data from the Technion SAP info fetcher.
 - The app is in Hebrew.
 - Doesn't have a Header, instead, the Logo will be shown as floating on the ReactView
