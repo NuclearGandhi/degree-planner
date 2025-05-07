@@ -45,3 +45,7 @@ This is a React-based degree planner application that helps students plan their 
 2. Implement authentication and cloud saving via Google accounts
 4. Implement rule editor for customizing degree requirements
 5. Add printable/exportable reports
+
+**Note on React Flow v12 Typing with TypeScript:**
+
+While React Flow v12 aims to improve TypeScript support (as detailed in its migration guide), practical application in this project has shown that node data interfaces (e.g., `CourseNodeData` defined in `src/types/flow.ts`) still require an index signature (e.g., `[key: string]: unknown;`). This is to satisfy underlying generic constraints within the `@xyflow/react` library that expect node data to be compatible with `Record<string, unknown>`, even when using the discriminated union pattern for different node types (`AppNode`). Attempts to remove this index signature, while following v12 documentation, lead to persistent linter errors. Future updates to `@xyflow/react` or project TypeScript configurations might allow for cleaner type definitions without this workaround.

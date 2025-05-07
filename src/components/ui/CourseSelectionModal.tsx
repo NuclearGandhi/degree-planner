@@ -1,0 +1,69 @@
+import React from 'react';
+import { RawCourseData } from '../../types/data';
+
+interface CourseSelectionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  courses: RawCourseData[]; // All available courses to list
+  onSelectCourse: (course: RawCourseData) => void;
+  semesterNumber: number | null; // To know which semester we are adding to
+}
+
+export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
+  isOpen,
+  onClose,
+  courses,
+  onSelectCourse,
+  semesterNumber,
+}) => {
+  if (!isOpen || semesterNumber === null) return null;
+
+  // TODO: Add filtering for courses already in plan or based on prerequisites/availability
+  // For now, lists all courses
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
+            Select Course for Semester {semesterNumber}
+          </h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            aria-label="Close modal"
+          >
+            &times;
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-grow pr-2">
+          {courses.length > 0 ? (
+            <ul className="space-y-2">
+              {courses.map((course) => (
+                <li key={course._id}>
+                  <button
+                    onClick={() => onSelectCourse(course)}
+                    className="w-full text-left p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-colors"
+                  >
+                    <div className="font-medium text-gray-800 dark:text-gray-200">{course.name} ({course._id})</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Credits: {course.credits}</div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-600 dark:text-gray-400">No courses available to add.</p>
+          )}
+        </div>
+        <div className="mt-6 text-right">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}; 
