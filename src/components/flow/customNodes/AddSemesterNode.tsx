@@ -16,9 +16,9 @@ const AddSemesterNode = ({ data, selected }: NodeProps<AddSemesterDisplayNode>) 
                   hover:border-green-600 hover:text-green-700 dark:hover:border-green-500 dark:hover:text-green-300
                   rounded-lg transition-colors bg-green-50 dark:bg-green-900 dark:bg-opacity-30
                   ${selected ? 'ring-2 ring-green-500' : ''}`}
-      title="Add a new semester to your plan"
+      title="הוסף סמסטר חדש לתוכנית שלך"
     >
-      + Add Semester
+      + הוסף סמסטר
     </button>
   );
 };

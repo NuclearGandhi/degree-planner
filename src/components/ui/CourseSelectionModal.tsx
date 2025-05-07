@@ -26,12 +26,12 @@ export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-            Select Course for Semester {semesterNumber}
+            בחר קורס לסמסטר {semesterNumber}
           </h2>
           <button 
             onClick={onClose} 
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            aria-label="Close modal"
+            aria-label="סגור"
           >
             &times;
           </button>
@@ -46,13 +46,13 @@ export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
                     className="w-full text-left p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-colors"
                   >
                     <div className="font-medium text-gray-800 dark:text-gray-200">{course.name} ({course._id})</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Credits: {course.credits}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">נקודות זכות: {course.credits}</div>
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-gray-600 dark:text-gray-400">No courses available to add.</p>
+            <p className="text-gray-600 dark:text-gray-400">אין קורסים זמינים להוספה.</p>
           )}
         </div>
         <div className="mt-6 text-right">
@@ -60,7 +60,7 @@ export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
             onClick={onClose}
             className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
-            Cancel
+            ביטול
           </button>
         </div>
       </div>

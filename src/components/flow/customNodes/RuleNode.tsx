@@ -12,9 +12,9 @@ const RuleNode: React.FC<NodeProps<RuleDisplayNode>> = ({ data }) => {
   return (
     <div className={`rule-node p-4 border-l-4 rounded-md shadow-lg min-w-[250px] ${statusColor} dark:bg-opacity-30`}>
       <div className={`font-semibold text-md mb-2 ${textColor}`}>{description}</div>
-      <div className={`text-sm mb-1 ${textColor}`}>Progress: {currentProgress}</div>
+      <div className={`text-sm mb-1 ${textColor}`}>התקדמות: {currentProgress}</div>
       <div className={`text-sm font-medium ${textColor}`}>
-        Status: {isSatisfied ? 'Satisfied' : 'Pending'}
+        מצב: {isSatisfied ? 'הושלם' : 'בהמתנה'}
       </div>
     </div>
   );

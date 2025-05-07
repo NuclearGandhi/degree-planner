@@ -15,7 +15,7 @@ export const PlanManagement: React.FC<PlanManagementProps> = ({
 
   return (
     <div className="fixed bottom-4 right-4 z-50 p-3 bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 rounded-lg shadow-md backdrop-blur-sm flex items-center space-x-2">
-      <span className="text-xs font-semibold mr-2 text-gray-700 dark:text-gray-300">Plan Slot:</span>
+      <span className="text-xs font-semibold mr-2 text-gray-700 dark:text-gray-300">חריץ תוכנית:</span>
       <select 
         value={selectedSlot}
         onChange={(e) => setSelectedSlot(parseInt(e.target.value, 10))}
@@ -28,16 +28,16 @@ export const PlanManagement: React.FC<PlanManagementProps> = ({
       <button
         onClick={() => onSavePlan(selectedSlot)}
         className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors"
-        title={`Save current plan to Slot ${selectedSlot}`}
+        title={`שמור תוכנית נוכחית לחריץ ${selectedSlot}`}
       >
-        Save
+        שמור
       </button>
       <button
         onClick={() => onLoadPlan(selectedSlot)}
         className="px-3 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors"
-        title={`Load plan from Slot ${selectedSlot}`}
+        title={`טען תוכנית מחריץ ${selectedSlot}`}
       >
-        Load
+        טען
       </button>
     </div>
   );

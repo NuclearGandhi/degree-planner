@@ -27,6 +27,7 @@ import { AveragesDisplay } from '../../components/ui/AveragesDisplay';
 import { PlanManagement } from '../../components/ui/PlanManagement';
 import { savePlanToSlot, loadPlanFromSlot, getActivePlanId } from '../../utils/planStorage';
 import { useTheme } from '../../contexts/ThemeContext';
+import { numberToHebrewLetter } from '../../utils/hebrewUtils';
 
 const nodeTypes = {
   course: CourseNode,
@@ -228,7 +229,7 @@ function DegreePlanView() {
       if (semesterKeys.length >= MAX_SEMESTERS) return prevTemplate;
 
       const nextSemesterNum = semesterKeys.length + 1;
-      const nextSemesterName = `Semester ${nextSemesterNum}`; // Placeholder name, replace with Hebrew convention if possible
+      const nextSemesterName = `סמסטר ${numberToHebrewLetter(nextSemesterNum)}`;
 
       return {
         ...prevTemplate,

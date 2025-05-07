@@ -18,9 +18,9 @@ const AddCourseNode = ({ data, selected }: NodeProps<AddCourseDisplayNode>) => {
                   hover:border-blue-500 hover:text-blue-500 dark:hover:border-blue-400 dark:hover:text-blue-400
                   rounded-lg transition-colors 
                   ${selected ? 'ring-2 ring-blue-500' : ''}`}
-      title={`Add course to semester ${data.semesterNumber}`}
+      title={`הוסף קורס לסמסטר ${data.semesterNumber}`}
     >
-      + Add Course
+      + הוסף קורס
     </button>
   );
 };
