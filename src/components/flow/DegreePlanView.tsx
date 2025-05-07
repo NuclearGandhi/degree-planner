@@ -71,6 +71,13 @@ const transformDataToNodes = (
 
   if (template.rules && Array.isArray(template.rules)) {
     template.rules.forEach((rule: DegreeRule, index: number) => {
+      // Log the rule object being processed
+      console.log(`[transformDataToNodes] Processing Rule:`, rule);
+      if (!rule || typeof rule.id === 'undefined' || typeof rule.description === 'undefined') {
+        console.warn(`[transformDataToNodes] Skipping rule at index ${index} due to missing id or description:`, rule);
+        return; // Skip potentially invalid rule object
+      }
+
       const ruleStatus = evaluateRule(
         rule,
         coursesInCurrentPlan,
@@ -78,10 +85,13 @@ const transformDataToNodes = (
         allCourses,
         template["courses-lists"] || []
       );
+      const nodeId = `rule-${rule.id || index}`;
+      const nodePosition = { x: HORIZONTAL_SPACING_RULE + index * (COLUMN_WIDTH + 20), y: yPosRules };
+      console.log(`[transformDataToNodes] Creating Rule Node: ID=${nodeId}, Position=`, nodePosition);
       flowNodes.push({
-        id: `rule-${rule.id || index}`,
+        id: nodeId,
         type: 'rule',
-        position: { x: HORIZONTAL_SPACING_RULE + index * (COLUMN_WIDTH + 20), y: yPosRules },
+        position: nodePosition,
         data: {
           id: rule.id || `rule_data_${index}`,
           description: rule.description,
@@ -106,23 +116,36 @@ const transformDataToNodes = (
     const semesterXPos = semesterAreaStartX + (maxSemesterNum - semesterNumberForLayout) * COLUMN_WIDTH;
 
     courseIds.forEach((courseId) => {
-      const courseData = allCourses.find(c => c._id === courseId);
-      if (courseData) {
-        flowNodes.push({
-          id: courseId,
-          type: 'course',
-          position: { x: semesterXPos, y: currentYInSemester },
-          data: {
-            label: courseData.name,
-            courseId: courseData._id,
-            credits: courseData.credits,
-            grade: grades[courseId] || '',
-            onGradeChange: onGradeChangeCallback,
-            onRemoveCourse: onRemoveCourseCallback,
-          },
-        });
-        currentYInSemester += NODE_HEIGHT_COURSE + VERTICAL_SPACING_RULE;
+      // Add guard for invalid courseId
+      if (typeof courseId !== 'string' || !courseId) {
+        console.warn(`[transformDataToNodes] Skipping invalid courseId: ${courseId} in semesterIndex ${semesterIndex}`);
+        return; // Skip this iteration
       }
+
+      const courseData = allCourses.find(c => c._id === courseId);
+      // Log whether courseData was found
+      if (!courseData) {
+        console.warn(`[transformDataToNodes] Course data not found for courseId: ${courseId}`);
+        return; // Skip creating node if course data is missing
+      }
+
+      const nodeId = courseId; // Course ID is used directly
+      const nodePosition = { x: semesterXPos, y: currentYInSemester };
+      console.log(`[transformDataToNodes] Creating Course Node: ID=${nodeId}, Position=`, nodePosition);
+      flowNodes.push({
+        id: nodeId,
+        type: 'course',
+        position: nodePosition,
+        data: {
+          label: courseData.name,
+          courseId: courseData._id,
+          credits: courseData.credits,
+          grade: grades[courseId] || '',
+          onGradeChange: onGradeChangeCallback,
+          onRemoveCourse: onRemoveCourseCallback,
+        },
+      });
+      currentYInSemester += NODE_HEIGHT_COURSE + VERTICAL_SPACING_RULE;
     });
 
     flowNodes.push({
@@ -329,43 +352,66 @@ function DegreePlanView() {
   // Initial Load Effect (tries to load active plan or default)
   useEffect(() => {
     const loadInitialData = async () => {
+      console.log("[DegreePlanView] Initial Load: Starting...");
       setIsLoading(true);
       const courses = await fetchAllCourses();
-      setAllCourses(courses); // Need all courses regardless
+      console.log("[DegreePlanView] Initial Load: Fetched allCourses:", courses);
+      setAllCourses(courses);
       
       const activeId = getActivePlanId();
       let loadedSuccessfully = false;
       if (activeId !== null) {
-        console.log(`Attempting to load active plan from slot: ${activeId}`);
+        console.log(`[DegreePlanView] Initial Load: Attempting to load active plan from slot: ${activeId}`);
         const loadedPlan = loadPlanFromSlot(activeId);
+        console.log("[DegreePlanView] Initial Load: Loaded plan from storage:", loadedPlan);
         if (loadedPlan) {
           setCurrentTemplate(loadedPlan.template);
           setGrades(loadedPlan.grades);
           loadedSuccessfully = true;
+          console.log("[DegreePlanView] Initial Load: Successfully loaded plan from slot. currentTemplate:", loadedPlan.template);
         }
       }
       if (!loadedSuccessfully) {
-        console.log("No active plan loaded, fetching default template.");
+        console.log("[DegreePlanView] Initial Load: No active plan loaded or load failed, fetching default template.");
         const degreeData = await fetchDegreeTemplates();
+        console.log("[DegreePlanView] Initial Load: Fetched degree templates data:", degreeData);
         const firstTemplateId = Object.keys(degreeData)[0];
-        if (firstTemplateId) {
+        console.log("[DegreePlanView] Initial Load: First template ID:", firstTemplateId);
+        if (firstTemplateId && degreeData[firstTemplateId]) {
           setCurrentTemplate(degreeData[firstTemplateId]);
+          console.log("[DegreePlanView] Initial Load: Set currentTemplate to default:", degreeData[firstTemplateId]);
+        } else {
+          console.warn("[DegreePlanView] Initial Load: No default template found or degreeData is empty.");
         }
-        setGrades({}); // Reset grades if loading default
+        setGrades({});
       }
       setIsLoading(false);
+      console.log("[DegreePlanView] Initial Load: Finished. isLoading: false");
     };
     loadInitialData();
-  }, []); // Run only once on mount
+  }, []);
 
   // useEffect to update nodes/edges when data changes
   useEffect(() => {
-    // Don't run node/edge generation if initial data is still loading
-    // or if allCourses is not yet populated as an array, or currentTemplate not set
-    if (isLoading || !currentTemplate || !Array.isArray(allCourses)) {
-        return;
+    console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. Dependencies changed.");
+    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", currentTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array');
+    
+    if (isLoading || !currentTemplate || !Array.isArray(allCourses) || allCourses.length === 0) {
+      console.log("[DegreePlanView] Node/Edge Update Effect: Guarded. Not generating nodes/edges yet.");
+      if (isLoading) console.log("Reason: isLoading is true.");
+      if (!currentTemplate) console.log("Reason: currentTemplate is falsy.");
+      if (!Array.isArray(allCourses)) console.log("Reason: allCourses is not an array.");
+      if (Array.isArray(allCourses) && allCourses.length === 0) console.log("Reason: allCourses is an empty array.");
+      // Optionally, if nodes are empty and not loading, set them to empty to clear previous state
+      if (!isLoading && nodes.length > 0) {
+         console.log("[DegreePlanView] Node/Edge Update Effect: Clearing existing nodes as conditions not met.");
+         setNodes([]);
+         setEdges([]);
+      }
+      return;
     }
 
+    console.log("[DegreePlanView] Node/Edge Update Effect: Guard passed. Generating nodes and edges with currentTemplate:", currentTemplate, "and allCourses count:", allCourses.length);
     const newNodes = transformDataToNodes(
       currentTemplate,
       allCourses,
@@ -376,9 +422,11 @@ function DegreePlanView() {
       handleRemoveCourseCallback
     );
     const newEdges = transformDataToEdges(currentTemplate, allCourses);
+    console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
+    // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading]); // Added isLoading dependency
+  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
