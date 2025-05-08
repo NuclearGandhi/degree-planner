@@ -30,6 +30,7 @@ import { savePlanToSlot, loadPlanFromSlot, getActivePlanId } from '../../utils/p
 import { useTheme } from '../../contexts/ThemeContext';
 import { numberToHebrewLetter } from '../../utils/hebrewUtils';
 import { checkPrerequisites } from '../../utils/prerequisiteChecker';
+import { CourseDetailModal } from '../../components/ui/CourseDetailModal';
 
 const nodeTypes = {
   course: CourseNode,
@@ -57,7 +58,8 @@ const transformDataToNodes = (
   onAddSemesterCallbackParam: () => void,
   onGradeChangeCallback: (courseId: string, grade: string) => void,
   onRemoveCourseCallback: (courseId: string) => void,
-  initialMandatoryCourseIds?: string[]
+  initialMandatoryCourseIds?: string[],
+  onCourseDoubleClickCallback?: (courseId: string) => void
 ): AppNode[] => {
   if (!template || typeof template.semesters !== 'object' || template.semesters === null) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
@@ -185,7 +187,8 @@ const transformDataToNodes = (
           grade: grades[courseId] || '',
           onGradeChange: onGradeChangeCallback,
           onRemoveCourse: onRemoveCourseCallback,
-          prerequisitesMet: prereqsMet
+          prerequisitesMet: prereqsMet,
+          onDoubleClick: onCourseDoubleClickCallback
         },
       });
       currentYInSemester += NODE_HEIGHT_COURSE + VERTICAL_SPACING_RULE;
@@ -321,6 +324,10 @@ function DegreePlanView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [targetSemesterForModal, setTargetSemesterForModal] = useState<number | null>(null);
 
+  // State for course detail modal
+  const [isCourseDetailModalOpen, setIsCourseDetailModalOpen] = useState(false);
+  const [detailedCourseInfo, setDetailedCourseInfo] = useState<RawCourseData | null>(null);
+
   const [isLoading, setIsLoading] = useState<boolean>(true); // Loading state
 
   const handleAddCourseToSemesterCallback = useCallback((semesterNumber: number) => {
@@ -415,6 +422,16 @@ function DegreePlanView() {
     setSelectedNodes(prevSelected => prevSelected.filter(node => node.id !== courseIdToRemove)); 
     // Alternatively, to clear all selection: setSelectedNodes([]);
   }, [setCurrentTemplate, setGrades, setSelectedNodes]); // Added setSelectedNodes to dependencies
+
+  // Callback for course node double-click
+  const handleCourseNodeDoubleClick = useCallback((courseId: string) => {
+    if (!Array.isArray(allCourses)) return;
+    const courseToShow = allCourses.find(c => c._id === courseId);
+    if (courseToShow) {
+      setDetailedCourseInfo(courseToShow);
+      setIsCourseDetailModalOpen(true);
+    }
+  }, [allCourses]);
 
   // Save/Load Callbacks
   const handleSavePlan = useCallback((slotId: number) => {
@@ -565,14 +582,15 @@ function DegreePlanView() {
       handleAddSemesterCallback,
       handleGradeChangeCallback,
       handleRemoveCourseCallback,
-      initialMandatoryCourseIdsFromTemplateDefinition
+      initialMandatoryCourseIdsFromTemplateDefinition,
+      handleCourseNodeDoubleClick
     );
     const newEdges = transformDataToEdges(currentTemplate, allCourses);
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
     // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
     setEdges(newEdges); // This sets the base edges
-  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, initialMandatoryCourseIdsFromTemplateDefinition]);
+  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, initialMandatoryCourseIdsFromTemplateDefinition, handleCourseNodeDoubleClick]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);
@@ -611,6 +629,7 @@ function DegreePlanView() {
           nodesDraggable={false}
           nodesConnectable={false}
           selectNodesOnDrag={false}
+          zoomOnDoubleClick={false}
         >
           <Controls />
           {/* <MiniMap /> */}
@@ -623,6 +642,12 @@ function DegreePlanView() {
         courses={availableCoursesForModal}
         onSelectCourse={handleSelectCourseFromModal}
         semesterNumber={targetSemesterForModal}
+      />
+      <CourseDetailModal 
+        isOpen={isCourseDetailModalOpen}
+        onClose={() => setIsCourseDetailModalOpen(false)}
+        course={detailedCourseInfo}
+        allCourses={allCourses}
       />
       <AveragesDisplay
         currentTemplate={currentTemplate}

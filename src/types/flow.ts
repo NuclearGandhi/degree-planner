@@ -12,6 +12,7 @@ export interface CourseNodeData {
   onGradeChange?: (courseId: string, grade: string) => void;
   onRemoveCourse?: (courseId: string) => void;
   prerequisitesMet?: boolean;
+  onDoubleClick?: (courseId: string) => void;
   [key: string]: unknown;
 }
 
