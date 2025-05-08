@@ -36,12 +36,13 @@ const nodeTypes = {
   addSemester: AddSemesterNode,
 };
 
-const COLUMN_WIDTH = 250; // Width of a semester column
-const NODE_HEIGHT_COURSE = 80; // Approximate height of a course node for vertical spacing
-const NODE_HEIGHT_RULE = 70; // Approximate height of a rule node
+const COLUMN_WIDTH = 300; // Increased width of a semester column
+const NODE_HEIGHT_COURSE = 90; // Increased approximate height of a course node
+const NODE_HEIGHT_RULE = 70;
 const HORIZONTAL_SPACING_RULE = 50;
-const VERTICAL_SPACING_RULE = 20;
-const SEMESTER_TOP_MARGIN = 50; // Space below rules / above first course in a semester
+const VERTICAL_SPACING_RULE = 40; // Further increased vertical spacing
+const HORIZONTAL_SPACING_SEMESTER = 50; // New: Spacing between semester columns
+const SEMESTER_TOP_MARGIN = 50;
 const ADD_SEMESTER_NODE_ID = 'add-new-semester-button';
 const MAX_SEMESTERS = 16;
 
@@ -108,12 +109,16 @@ const transformDataToNodes = (
   const semesterEntries = Object.entries(template.semesters);
   const numExistingSemesters = semesterEntries.length;
   const maxSemesterNum = numExistingSemesters;
-  const semesterAreaStartX = numExistingSemesters < MAX_SEMESTERS ? COLUMN_WIDTH : 0;
+  // Adjust starting X position based on whether the "Add Semester" node will be shown
+  const addSemesterNodeIsVisible = numExistingSemesters < MAX_SEMESTERS;
+  const semesterAreaStartX = addSemesterNodeIsVisible ? COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER : 0;
 
   semesterEntries.forEach(([, courseIds], semesterIndex) => {
     const semesterNumberForLayout = semesterIndex + 1;
     let currentYInSemester = yPosRules;
-    const semesterXPos = semesterAreaStartX + (maxSemesterNum - semesterNumberForLayout) * COLUMN_WIDTH;
+    // RTL layout: higher semester number means further to the left
+    // Add HORIZONTAL_SPACING_SEMESTER between columns
+    const semesterXPos = semesterAreaStartX + (maxSemesterNum - semesterNumberForLayout) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
 
     courseIds.forEach((courseId) => {
       // Add guard for invalid courseId
@@ -164,7 +169,8 @@ const transformDataToNodes = (
     flowNodes.push({
       id: ADD_SEMESTER_NODE_ID,
       type: 'addSemester',
-      position: { x: 0, y: yPosRules + NODE_HEIGHT_COURSE / 2 },
+      // Position it in the first (rightmost in RTL) column, vertically aligned with semester content start
+      position: { x: HORIZONTAL_SPACING_SEMESTER / 2, y: yPosRules },
       data: { onAddSemester: onAddSemesterCallbackParam },
       draggable: false,
     });
@@ -463,6 +469,9 @@ function DegreePlanView() {
           fitView
           attributionPosition="top-right"
           colorMode={theme}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          selectNodesOnDrag={false}
         >
           <Controls />
           {/* <MiniMap /> */}

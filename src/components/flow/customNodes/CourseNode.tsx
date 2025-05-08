@@ -22,16 +22,17 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<CourseDisplayNode>) 
 
   return (
     <div 
-      className={`course-node relative shadow-md p-3 pr-8 border rounded-lg bg-white min-w-[180px] 
-                  dark:bg-gray-800 dark:border-gray-700 
-                  ${selected ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-300 dark:border-gray-600'}
+      dir="rtl"
+      className={`course-node relative shadow-md p-3 pl-4 pr-4 border rounded-lg !bg-white w-[240px] h-[120px] 
+                  dark:!bg-gray-800 dark:!border-gray-700 
+                  ${selected ? '!border-blue-500 ring-2 ring-blue-500' : '!border-gray-300 dark:!border-gray-600'}
                   ${dragging ? 'opacity-70' : ''}`}>
       {/* Remove Button */}      
       {data.onRemoveCourse && (
         <button 
           onClick={handleRemoveClick}
           onMouseDown={onInputMouseDown} // Prevent drag when clicking button
-          className="absolute top-1 right-1 p-0.5 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-700 dark:hover:text-red-200 transition-colors"
+          className="absolute top-1 left-1 p-0.5 rounded-full !text-gray-400 hover:!bg-red-100 hover:!text-red-600 dark:hover:!bg-red-700 dark:hover:!text-red-200 transition-colors"
           aria-label="הסר קורס"
         >
           {/* Simple X icon */} 
@@ -42,18 +43,18 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<CourseDisplayNode>) 
       )}
 
       <Handle type="target" position={Position.Right} className="!bg-teal-500 w-2.5 h-2.5 rounded-full" />
-      <div className="font-bold text-sm text-gray-900 dark:text-gray-100 mb-1">{data.label}</div>
-      <div className="text-xs text-gray-700 dark:text-gray-300">מזהה: {data.courseId}</div>
-      <div className="text-xs text-gray-700 dark:text-gray-300 mb-2">נקודות זכות: {data.credits}</div>
+      <div className="font-bold text-sm !text-gray-900 dark:!text-gray-100 mb-1 truncate">{data.label}</div>
+      <div className="text-xs !text-gray-700 dark:!text-gray-300">מספר קורס: {data.courseId}</div>
+      <div className="text-xs !text-gray-700 dark:!text-gray-300 mb-2">נקודות זכות: {data.credits}</div>
       
-      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700" onMouseDown={onInputMouseDown}>
-        <label htmlFor={`grade-${data.courseId}`} className="text-xs text-gray-500 dark:text-gray-400 mr-1">ציון:</label>
+      <div className="mt-2 pt-2 border-t !border-gray-200 dark:!border-gray-700 flex items-center" onMouseDown={onInputMouseDown}>
+        <label htmlFor={`grade-${data.courseId}`} className="text-xs !text-gray-500 dark:!text-gray-400">ציון:</label>
         <input 
           type="text" 
           id={`grade-${data.courseId}`} 
           defaultValue={data.grade || ''} 
           onChange={handleGradeInputChange}
-          className="w-16 p-1 text-xs border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 outline-none"
+          className="w-16 p-1 text-xs border !border-gray-300 dark:!border-gray-600 rounded !bg-gray-50 dark:!bg-gray-700 !text-gray-900 dark:!text-gray-200 focus:ring-1 focus:ring-blue-500 outline-none mr-2"
         />
       </div>
       <Handle type="source" position={Position.Left} className="!bg-rose-500 w-2.5 h-2.5 rounded-full" />
