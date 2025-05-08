@@ -1,14 +1,11 @@
 {
   "mechanical-engineering-general": {
     "name": "הנדסת מכונות - כללי",
-    "total-credits-required": 157.5,
-    "credits-from-mandatory": 109.5,
     "credits-from-malag": 6,
     "credits-from-sports": 2,
-    "credits-from-selective": 30,
     "credits-from-final-project": 6,
     "semesters": {
-      "סמסטר א'": ["01040041", "01040065", "01250001", "02340128"],
+      "סמסטר א'": ["01040041", "01040065", "01250001", "02340128", "03240033"],
       "סמסטר ב'": [
         "00340048",
         "00340028",
