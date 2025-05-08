@@ -32,11 +32,13 @@ export interface CourseListRule {
 export interface DegreeRule {
   id: string;
   description: string;
-  type: 'total_credits' | 'credits_from_list' | 'min_grade' | string;
+  type: 'total_credits' | 'credits_from_list' | 'min_grade' | 'minCredits' | 'minCoursesFromList' | string;
   required_credits?: number;
-  course_list_name?: string; 
+  course_list_name?: string;
+  listName?: string;
   min_grade_value?: number;
   courses_for_min_grade?: string[];
+  min?: number;
 }
 
 // Represents a degree template from degrees.json
@@ -48,7 +50,7 @@ export interface DegreeTemplate {
   // and values are arrays of course IDs (string[])
   semesters: Record<string, string[]>; 
   rules?: DegreeRule[]; 
-  "courses-lists"?: CourseListRule[]; 
+  "courses-lists"?: Record<string, string[] | number[]>;
 }
 
 export interface DegreesFileStructure {

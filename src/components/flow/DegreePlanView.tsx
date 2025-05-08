@@ -18,6 +18,7 @@ import CourseNode from './customNodes/CourseNode';
 import RuleNode from './customNodes/RuleNode';
 import AddCourseNode from './customNodes/AddCourseNode';
 import AddSemesterNode from './customNodes/AddSemesterNode';
+import SemesterTitleNode from './customNodes/SemesterTitleNode';
 import { CourseSelectionModal } from '../../components/ui/CourseSelectionModal';
 import { fetchAllCourses, fetchDegreeTemplates } from '../../utils/dataLoader';
 import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, PrerequisiteGroup } from '../../types/data';
@@ -34,17 +35,18 @@ const nodeTypes = {
   rule: RuleNode,
   addCourse: AddCourseNode,
   addSemester: AddSemesterNode,
+  semesterTitle: SemesterTitleNode,
 };
 
 const COLUMN_WIDTH = 300; // Increased width of a semester column
 const NODE_HEIGHT_COURSE = 90; // Increased approximate height of a course node
 const NODE_HEIGHT_RULE = 70;
-const HORIZONTAL_SPACING_RULE = 50;
 const VERTICAL_SPACING_RULE = 40; // Further increased vertical spacing
 const HORIZONTAL_SPACING_SEMESTER = 50; // New: Spacing between semester columns
-const SEMESTER_TOP_MARGIN = 50;
+const SEMESTER_TOP_MARGIN = 100; // Further increased space below rules / above semester titles
 const ADD_SEMESTER_NODE_ID = 'add-new-semester-button';
 const MAX_SEMESTERS = 16;
+const SEMESTER_TITLE_HEIGHT = 40; // Approximate height for the title node + spacing
 
 const transformDataToNodes = (
   template: DegreeTemplate | undefined,
@@ -63,14 +65,22 @@ const transformDataToNodes = (
   }
 
   const flowNodes: AppNode[] = [];
-  let yPosRules = VERTICAL_SPACING_RULE;
+  let currentContentY = VERTICAL_SPACING_RULE; // Initial Y for the topmost content (rules or semester titles)
 
   const allCourseIdsInTemplate = Object.values(template.semesters).flat();
   const coursesInCurrentPlan = (Array.isArray(allCourses) ? allCourseIdsInTemplate
     .map(courseId => allCourses.find(c => c._id === courseId))
     .filter(Boolean) : []) as RawCourseData[];
 
-  if (template.rules && Array.isArray(template.rules)) {
+  // --- Move Semester Calculations Up ---
+  const semesterEntries = Object.entries(template.semesters);
+  const numExistingSemesters = semesterEntries.length;
+  const maxSemesterNum = numExistingSemesters > 0 ? Math.max(...semesterEntries.map((_, i) => i + 1)) : 0; // Use 1-based index for max
+  const addSemesterNodeIsVisible = numExistingSemesters < MAX_SEMESTERS;
+  const baseSemesterAreaStartX = addSemesterNodeIsVisible ? COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER : 0; 
+  // --- End Moved Calculations ---
+
+  if (template.rules && Array.isArray(template.rules) && template.rules.length > 0) {
     template.rules.forEach((rule: DegreeRule, index: number) => {
       // Log the rule object being processed
       console.log(`[transformDataToNodes] Processing Rule:`, rule);
@@ -84,10 +94,11 @@ const transformDataToNodes = (
         coursesInCurrentPlan,
         grades,
         allCourses,
-        template["courses-lists"] || []
+        template["courses-lists"]
       );
       const nodeId = `rule-${rule.id || index}`;
-      const nodePosition = { x: HORIZONTAL_SPACING_RULE + index * (COLUMN_WIDTH + 20), y: yPosRules };
+      const firstSemesterXPos = baseSemesterAreaStartX + (maxSemesterNum > 0 ? (maxSemesterNum - 1) : 0) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
+      const nodePosition = { x: firstSemesterXPos - index * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: currentContentY };
       console.log(`[transformDataToNodes] Creating Rule Node: ID=${nodeId}, Position=`, nodePosition);
       flowNodes.push({
         id: nodeId,
@@ -101,24 +112,29 @@ const transformDataToNodes = (
         },
       });
     });
-    yPosRules += template.rules.length > 0 ? NODE_HEIGHT_RULE + SEMESTER_TOP_MARGIN : SEMESTER_TOP_MARGIN;
-  } else if (template.rules) {
-    console.warn('Data Structure Warning (transformDataToNodes): template.rules is not an array!', template.rules);
+    currentContentY += NODE_HEIGHT_RULE + SEMESTER_TOP_MARGIN; // Advance Y below the rule area
+  } else {
+    // If no rules, ensure semester titles still respect a top margin.
+    // If VERTICAL_SPACING_RULE is already >= SEMESTER_TOP_MARGIN, this might be redundant,
+    // but it ensures SEMESTER_TOP_MARGIN is the effective minimum if VERTICAL_SPACING_RULE is smaller.
+    currentContentY = Math.max(currentContentY, SEMESTER_TOP_MARGIN);
   }
 
-  const semesterEntries = Object.entries(template.semesters);
-  const numExistingSemesters = semesterEntries.length;
-  const maxSemesterNum = numExistingSemesters;
-  // Adjust starting X position based on whether the "Add Semester" node will be shown
-  const addSemesterNodeIsVisible = numExistingSemesters < MAX_SEMESTERS;
-  const semesterAreaStartX = addSemesterNodeIsVisible ? COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER : 0;
-
-  semesterEntries.forEach(([, courseIds], semesterIndex) => {
+  // Semester Title and Course Node Generation (uses already calculated values)
+  semesterEntries.forEach(([semesterName, courseIds], semesterIndex) => {
     const semesterNumberForLayout = semesterIndex + 1;
-    let currentYInSemester = yPosRules;
-    // RTL layout: higher semester number means further to the left
-    // Add HORIZONTAL_SPACING_SEMESTER between columns
-    const semesterXPos = semesterAreaStartX + (maxSemesterNum - semesterNumberForLayout) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
+    const semesterXPos = baseSemesterAreaStartX + (maxSemesterNum - semesterNumberForLayout) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
+
+    flowNodes.push({
+      id: `title-sem-${semesterNumberForLayout}`,
+      type: 'semesterTitle',
+      position: { x: semesterXPos, y: currentContentY }, // Titles start at currentContentY
+      data: { title: semesterName },
+      draggable: false,
+      selectable: false,
+    });
+
+    let currentYInSemester = currentContentY + SEMESTER_TITLE_HEIGHT; // Courses start below title
 
     courseIds.forEach((courseId) => {
       // Add guard for invalid courseId
@@ -170,7 +186,7 @@ const transformDataToNodes = (
       id: ADD_SEMESTER_NODE_ID,
       type: 'addSemester',
       // Position it in the first (rightmost in RTL) column, vertically aligned with semester content start
-      position: { x: HORIZONTAL_SPACING_SEMESTER / 2, y: yPosRules },
+      position: { x: HORIZONTAL_SPACING_SEMESTER / 2, y: currentContentY },
       data: { onAddSemester: onAddSemesterCallbackParam },
       draggable: false,
     });

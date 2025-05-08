@@ -14,7 +14,7 @@ const RuleNode: React.FC<NodeProps<RuleDisplayNode>> = ({ data }) => {
   const currentProgress = data.currentProgress;
 
   return (
-    <div dir="rtl" className={`rule-node p-4 border-l-4 rounded-md shadow-lg w-[240px] h-[120px] ${statusColor} dark:!bg-opacity-30 flex flex-col justify-center`}>
+    <div dir="rtl" className={`rule-node p-4 border-r-4 rounded-md shadow-lg w-[240px] h-[120px] ${statusColor} flex flex-col justify-center`}>
       <div className={`font-semibold text-md mb-2 ${textColor}`}>{description}</div>
       <div className={`text-sm mb-1 ${textColor}`}>התקדמות: {currentProgress}</div>
       <div className={`text-sm font-medium ${textColor}`}>

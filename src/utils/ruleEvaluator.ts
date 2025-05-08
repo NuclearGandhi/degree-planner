@@ -1,4 +1,4 @@
-import { DegreeRule, RawCourseData, CourseListRule } from '../types/data';
+import { DegreeRule, RawCourseData } from '../types/data';
 
 export interface EvaluatedRuleStatus {
   currentProgressString: string;
@@ -14,7 +14,7 @@ export function evaluateRule(
   coursesInPlan: RawCourseData[], // List of RawCourseData objects currently in the student's plan
   grades: Record<string, string>, // courseId: grade string
   allCoursesData: RawCourseData[], // All available course data (for looking up details of courses in lists)
-  degreeCourseLists: CourseListRule[] = [] // From template['courses-lists']
+  degreeCourseLists?: Record<string, string[] | number[]> // Adjusted type
 ): EvaluatedRuleStatus {
   let currentProgressString = "N/A";
   let isSatisfied = false;
@@ -31,22 +31,42 @@ export function evaluateRule(
     case 'total_credits':
       if (rule.required_credits !== undefined) {
         const currentCredits = coursesInPlan.reduce((sum, course) => sum + course.credits, 0);
-        currentProgressString = `${currentCredits}/${rule.required_credits} points`;
+        currentProgressString = `${currentCredits}/${rule.required_credits} נ"ז`;
         isSatisfied = currentCredits >= rule.required_credits;
       }
       break;
 
+    case 'minCredits':
+      if (rule.min !== undefined) {
+        const currentCredits = coursesInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+        currentProgressString = `${currentCredits}/${rule.min} נ"ז`;
+        isSatisfied = currentCredits >= rule.min;
+      } else {
+        currentProgressString = "כלל 'minCredits' לא הוגדר כראוי (חסר 'min')";
+      }
+      break;
+
     case 'credits_from_list':
-      if (rule.course_list_name && rule.required_credits !== undefined) {
-        const listDefinition = degreeCourseLists.find(l => l.name === rule.course_list_name);
-        if (listDefinition) {
-          const coursesFromListInPlan = coursesInPlan.filter(cp => listDefinition.courses.includes(cp._id));
-          const currentCreditsFromList = coursesFromListInPlan.reduce((sum, course) => sum + course.credits, 0);
-          currentProgressString = `${currentCreditsFromList}/${rule.required_credits} points from ${rule.course_list_name}`;
-          isSatisfied = currentCreditsFromList >= rule.required_credits;
-        } else {
-          currentProgressString = `Course list "${rule.course_list_name}" not found.`;
-        }
+      if (rule.course_list_name && rule.required_credits !== undefined && degreeCourseLists && Array.isArray(degreeCourseLists[rule.course_list_name])) {
+        const listCourseIds = degreeCourseLists[rule.course_list_name] as string[];
+        const coursesFromListInPlan = coursesInPlan.filter(cp => listCourseIds.includes(cp._id));
+        const currentCreditsFromList = coursesFromListInPlan.reduce((sum, course) => sum + course.credits, 0);
+        currentProgressString = `${currentCreditsFromList}/${rule.required_credits} נ"ז מ${rule.course_list_name}`;
+        isSatisfied = currentCreditsFromList >= rule.required_credits;
+      } else {
+        currentProgressString = `רשימת קורסים "${rule.course_list_name}" לא נמצאה או שחסר required_credits.`;
+      }
+      break;
+
+    case 'minCoursesFromList':
+      if (rule.listName && rule.min !== undefined && degreeCourseLists && Array.isArray(degreeCourseLists[rule.listName])) {
+        const listCourseIds = degreeCourseLists[rule.listName] as string[];
+        const coursesFromListInPlan = coursesInPlan.filter(cp => listCourseIds.includes(cp._id));
+        const completedCoursesFromList = coursesFromListInPlan.length;
+        currentProgressString = `${completedCoursesFromList}/${rule.min} קורסים מ${rule.listName}`;
+        isSatisfied = completedCoursesFromList >= rule.min;
+      } else {
+        currentProgressString = `כלל 'minCoursesFromList' לא הוגדר כראוי (חסר listName, min, או שהרשימה לא קיימת).`;
       }
       break;
     

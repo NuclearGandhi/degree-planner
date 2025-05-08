@@ -31,6 +31,21 @@
       ],
       "סמסטר ו'": ["00340034", "00340057", "00340371"]
     },
+    "rules": [
+      {
+        "id": "total_credits_rule",
+        "description": "סה\"כ נקודות זכות להשלמה",
+        "type": "minCredits",
+        "min": 157.5 
+      },
+      {
+        "id": "list_a_min_courses",
+        "description": "לפחות קורס 1 מרשימה א'",
+        "type": "minCoursesFromList",
+        "listName": "רשימה א'",
+        "min": 1
+      }
+    ],
     "courses-lists": {
       "must-take-min-num-of-courses": [1, 2, 2, 2, 2],
       "רשימה א'": ["00350022", "00360015", "00350199", "00350013", "00350039"],

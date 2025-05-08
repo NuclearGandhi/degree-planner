@@ -33,14 +33,20 @@ export interface AddSemesterNodeData {
   [key: string]: unknown;
 }
 
+export interface SemesterTitleNodeData {
+  title: string;
+  [key: string]: unknown;
+}
+
 // Specific React Flow Node types using the data interfaces and type strings
 export type CourseDisplayNode = RFNode<CourseNodeData, 'course'>;
 export type RuleDisplayNode = RFNode<RuleNodeData, 'rule'>;
 export type AddCourseDisplayNode = RFNode<AddCourseNodeData, 'addCourse'>;
 export type AddSemesterDisplayNode = RFNode<AddSemesterNodeData, 'addSemester'>;
+export type SemesterTitleDisplayNode = RFNode<SemesterTitleNodeData, 'semesterTitle'>;
 
 // Union type for all nodes in the application
-export type AppNode = CourseDisplayNode | RuleDisplayNode | AddCourseDisplayNode | AddSemesterDisplayNode;
+export type AppNode = CourseDisplayNode | RuleDisplayNode | AddCourseDisplayNode | AddSemesterDisplayNode | SemesterTitleDisplayNode;
 
 // Type for edges in the application
 // For now, a generic RFEdge is fine, but can be made more specific if needed.
