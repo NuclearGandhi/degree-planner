@@ -11,6 +11,7 @@ export interface CourseNodeData {
   grade?: string;
   onGradeChange?: (courseId: string, grade: string) => void;
   onRemoveCourse?: (courseId: string) => void;
+  prerequisitesMet?: boolean;
   [key: string]: unknown;
 }
 
@@ -59,7 +60,9 @@ export type AppNode = CourseDisplayNode | RuleDisplayNode | AddCourseDisplayNode
 
 // Type for edges in the application
 // For now, a generic RFEdge is fine, but can be made more specific if needed.
-export type AppEdge = RFEdge;
+export type AppEdge = RFEdge & {
+    pathOptions?: { curvature?: number; borderRadius?: number; offset?: number };
+  };
 
 // Types for change handlers, if explicitly needed
 export type AppOnNodesChange = (changes: NodeChange<AppNode>[]) => void;

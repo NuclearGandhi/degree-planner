@@ -7,9 +7,9 @@ import {
   // MiniMap, // Commented out as it's no longer used
   useNodesState,
   useEdgesState,
-  addEdge,
+  // addEdge, // Removed as onConnect is commented out
   BackgroundVariant,
-  Connection,
+  // Connection, // Removed as onConnect is commented out
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -29,6 +29,7 @@ import { PlanManagement } from '../../components/ui/PlanManagement';
 import { savePlanToSlot, loadPlanFromSlot, getActivePlanId } from '../../utils/planStorage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { numberToHebrewLetter } from '../../utils/hebrewUtils';
+import { checkPrerequisites } from '../../utils/prerequisiteChecker';
 
 const nodeTypes = {
   course: CourseNode,
@@ -41,8 +42,8 @@ const nodeTypes = {
 const COLUMN_WIDTH = 300; // Increased width of a semester column
 const NODE_HEIGHT_COURSE = 90; // Increased approximate height of a course node
 // const NODE_HEIGHT_RULE = 70; // No longer used directly, height is estimated
-const VERTICAL_SPACING_RULE = 40; // Further increased vertical spacing
-const HORIZONTAL_SPACING_SEMESTER = 50; // New: Spacing between semester columns
+const VERTICAL_SPACING_RULE = 60; // Further increased vertical spacing, was 40
+const HORIZONTAL_SPACING_SEMESTER = 75; // New: Spacing between semester columns
 const SEMESTER_TOP_MARGIN = 100; // Further increased space below rules / above semester titles
 const ADD_SEMESTER_NODE_ID = 'add-new-semester-button';
 const MAX_SEMESTERS = 16;
@@ -167,6 +168,10 @@ const transformDataToNodes = (
       const nodeId = courseId; // Course ID is used directly
       const nodePosition = { x: semesterXPos, y: currentYInSemester };
       console.log(`[transformDataToNodes] Creating Course Node: ID=${nodeId}, Position=`, nodePosition);
+      
+      // Check prerequisites
+      const prereqsMet = checkPrerequisites(nodeId, template.semesters, allCourses);
+
       flowNodes.push({
         id: nodeId,
         type: 'course',
@@ -178,6 +183,7 @@ const transformDataToNodes = (
           grade: grades[courseId] || '',
           onGradeChange: onGradeChangeCallback,
           onRemoveCourse: onRemoveCourseCallback,
+          prerequisitesMet: prereqsMet
         },
       });
       currentYInSemester += NODE_HEIGHT_COURSE + VERTICAL_SPACING_RULE;
@@ -212,6 +218,7 @@ const transformDataToEdges = (
   template: DegreeTemplate | undefined,
   allCourses: RawCourseData[]
 ): AppEdge[] => {
+  console.log('[transformDataToEdges] Starting. Template defined:', !!template, 'AllCourses count:', Array.isArray(allCourses) ? allCourses.length : 'N/A');
   if (!template || typeof template.semesters !== 'object' || template.semesters === null || !Array.isArray(allCourses)) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
       console.warn('Data Structure Warning (transformDataToEdges): template.semesters is not an object!', template.semesters);
@@ -224,41 +231,81 @@ const transformDataToEdges = (
 
   const edges: AppEdge[] = [];
   const allCourseIdsInPlan = Object.values(template.semesters).flat();
+  console.log('[transformDataToEdges] All course IDs in current plan:', allCourseIdsInPlan);
 
   const isCourseInPlan = (courseId: string): boolean => {
-    return allCourseIdsInPlan.includes(courseId);
+    const result = allCourseIdsInPlan.includes(courseId);
+    // console.log(`[transformDataToEdges] isCourseInPlan check: courseId=${courseId}, inPlan=${result}`); // Can be too verbose
+    return result;
   };
 
   // Iterate over each course in the plan to find its prerequisites
   allCourseIdsInPlan.forEach(courseId => {
     const course = allCourses.find(c => c._id === courseId);
-    if (course && course.prerequisites) {
-      const processPrerequisites = (prereq: PrerequisiteItem | PrerequisiteGroup, targetCourseId: string) => {
+    console.log(`[transformDataToEdges] Processing courseId: ${courseId}`);
+    if (course) {
+      console.log(`[transformDataToEdges] Found course data for ${courseId}. Prerequisites:`, JSON.stringify(course.prereqTree, null, 2));
+    } else {
+      console.log(`[transformDataToEdges] Course data NOT FOUND for ${courseId} in allCourses.`);
+      return; // Skip if course data not found
+    }
+
+    if (course && course.prereqTree) {
+      const processPrerequisites = (prereq: PrerequisiteItem | PrerequisiteGroup | { or?: (PrerequisiteItem | PrerequisiteGroup)[], and?: (PrerequisiteItem | PrerequisiteGroup)[] }, targetCourseId: string) => {
         if (typeof prereq === 'string') { // Prereq is a course ID
-          if (isCourseInPlan(prereq)) { // Check if the prerequisite course is also in the plan
+          console.log(`[transformDataToEdges] processPrerequisites: Checking simple prereq string: '${prereq}' for target '${targetCourseId}'`);
+          const sourceInPlan = isCourseInPlan(prereq);
+          console.log(`[transformDataToEdges] processPrerequisites: Is prereq '${prereq}' in plan? ${sourceInPlan}`);
+          if (sourceInPlan) {
+            console.log(`[transformDataToEdges] ADDING EDGE: from '${prereq}' to '${targetCourseId}'`);
             edges.push({
               id: `edge-${prereq}-${targetCourseId}`,
               source: prereq,
               target: targetCourseId,
-              type: 'smoothstep',
-              markerEnd: { type: MarkerType.ArrowClosed },
+              type: 'default',
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#cccccc' },
               animated: false,
-              style: { stroke: '#888' },
+              style: { stroke: '#cccccc', strokeWidth: 1.5, strokeOpacity: 0.2 },
+              pathOptions: { curvature: 0.25 }
             });
           }
-        } else if (prereq && typeof prereq === 'object' && Array.isArray((prereq as PrerequisiteGroup).list)) { // Prereq is a group
-          (prereq as PrerequisiteGroup).list.forEach(item => processPrerequisites(item, targetCourseId));
+        } else if (prereq && typeof prereq === 'object') {
+          let itemsToProcess: (PrerequisiteItem | PrerequisiteGroup)[] = [];
+          if (Array.isArray((prereq as { or?: [] }).or)) {
+            console.log(`[transformDataToEdges] processPrerequisites: Processing OR group for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
+            itemsToProcess = (prereq as { or: [] }).or;
+          } else if (Array.isArray((prereq as { and?: [] }).and)) {
+            console.log(`[transformDataToEdges] processPrerequisites: Processing AND group for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
+            itemsToProcess = (prereq as { and: [] }).and;
+          } else if (Array.isArray((prereq as PrerequisiteGroup).list)) {
+            // This handles the case where the structure is { type: '...', list: [...] }
+            console.log(`[transformDataToEdges] processPrerequisites: Processing direct LIST group for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
+            itemsToProcess = (prereq as PrerequisiteGroup).list;
+          }
+
+          if (itemsToProcess.length > 0) {
+            itemsToProcess.forEach(item => processPrerequisites(item, targetCourseId));
+          } else if (Object.keys(prereq).length > 0) { // Avoid logging for empty objects if any slip through
+            console.log(`[transformDataToEdges] processPrerequisites: Skipping unknown object prereq type or empty list for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
+          }
+        } else if (prereq) {
+            // This case might not be reached if the object handling is comprehensive
+            console.log(`[transformDataToEdges] processPrerequisites: Fallback - Skipping unknown prereq type for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
         }
       };
-      processPrerequisites(course.prerequisites, courseId);
+      processPrerequisites(course.prereqTree, courseId);
+    } else {
+      console.log(`[transformDataToEdges] Course ${courseId} has no prerequisites or course data missing.`);
     }
   });
+  console.log('[transformDataToEdges] Finished. Total edges generated:', edges.length);
   return edges;
 };
 
 function DegreePlanView() {
   const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge>([]);
+  const [selectedNodes, setSelectedNodes] = useState<AppNode[]>([]); // Added state for selected nodes
   
   const { theme } = useTheme();
 
@@ -361,7 +408,10 @@ function DegreePlanView() {
       delete newGrades[courseIdToRemove];
       return newGrades;
     });
-  }, []);
+    // Clear selection if the removed node was selected
+    setSelectedNodes(prevSelected => prevSelected.filter(node => node.id !== courseIdToRemove)); 
+    // Alternatively, to clear all selection: setSelectedNodes([]);
+  }, [setCurrentTemplate, setGrades, setSelectedNodes]); // Added setSelectedNodes to dependencies
 
   // Save/Load Callbacks
   const handleSavePlan = useCallback((slotId: number) => {
@@ -426,7 +476,46 @@ function DegreePlanView() {
     loadInitialData();
   }, []);
 
-  // useEffect to update nodes/edges when data changes
+  // New useEffect for styling edges based on selection
+  useEffect(() => {
+    // if (!edges.length && selectedNodes.length === 0) return; 
+
+    const actualSelectedCourseNode = selectedNodes.find(n => n.type === 'course');
+
+    if (actualSelectedCourseNode) {
+      const selectedId = actualSelectedCourseNode.id;
+      setEdges(prevEdges => 
+        prevEdges.map(edge => {
+          const isActive = edge.source === selectedId || edge.target === selectedId;
+          if (isActive) {
+            return {
+              ...edge,
+              style: { ...edge.style, stroke: '#f59e0b', strokeWidth: 2.5, strokeOpacity: 1 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b' }, 
+              zIndex: 10, 
+            };
+          }
+          return {
+            ...edge,
+            style: { ...edge.style, stroke: '#d1d5db', strokeWidth: 1, strokeOpacity: 0.05 },
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#d1d5db' }, 
+            zIndex: 0, 
+          };
+        })
+      );
+    } else {
+      setEdges(prevEdges => 
+        prevEdges.map(edge => ({
+          ...edge,
+          style: { stroke: '#cccccc', strokeWidth: 1.5, strokeOpacity: 0.2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#cccccc' }, 
+          zIndex: 0, 
+        }))
+      );
+    }
+  }, [selectedNodes, setEdges]);
+
+  // useEffect to update nodes/edges when data changes (MAIN EFFECT)
   useEffect(() => {
     console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. Dependencies changed.");
     console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", currentTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array');
@@ -460,13 +549,12 @@ function DegreePlanView() {
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
     // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
-    setEdges(newEdges);
+    setEdges(newEdges); // This sets the base edges
   }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading]);
 
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
-  );
+  const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
+    setSelectedNodes(selNodes);
+  }, []);
 
   // Filter courses for modal: exclude those already in the current plan
   const availableCoursesForModal = useMemo(() => {
@@ -493,7 +581,7 @@ function DegreePlanView() {
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          onSelectionChange={handleSelectionChange}
           nodeTypes={nodeTypes}
           fitView
           attributionPosition="top-right"
