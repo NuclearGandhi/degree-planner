@@ -30,6 +30,8 @@ export interface RuleNodeData {
     requiredValue: number; 
     isSatisfied: boolean; 
   }[] | null;
+  onEditRule?: (id: string) => void;
+  onDeleteRule?: (id: string) => void;
   [key: string]: unknown;
 }
 

@@ -31,6 +31,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { numberToHebrewLetter } from '../../utils/hebrewUtils';
 import { checkPrerequisites } from '../../utils/prerequisiteChecker';
 import { CourseDetailModal } from '../../components/ui/CourseDetailModal';
+import RuleEditorModal from '../../components/ui/RuleEditorModal';
 
 const nodeTypes = {
   course: CourseNode,
@@ -59,7 +60,9 @@ const transformDataToNodes = (
   onGradeChangeCallback: (courseId: string, grade: string) => void,
   onRemoveCourseCallback: (courseId: string) => void,
   initialMandatoryCourseIds?: string[],
-  onCourseDoubleClickCallback?: (courseId: string) => void
+  onCourseDoubleClickCallback?: (courseId: string) => void,
+  onEditRuleCallback?: (ruleId: string) => void,
+  onDeleteRuleCallback?: (ruleId: string) => void
 ): AppNode[] => {
   if (!template || typeof template.semesters !== 'object' || template.semesters === null) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
@@ -128,7 +131,9 @@ const transformDataToNodes = (
           isSatisfied: ruleStatus.isSatisfied,
           currentValue: ruleStatus.currentValue,
           requiredValue: ruleStatus.requiredValue,
-          listProgressDetails: ruleStatus.listProgressDetails
+          listProgressDetails: ruleStatus.listProgressDetails,
+          onEditRule: onEditRuleCallback,
+          onDeleteRule: onDeleteRuleCallback,
         },
       });
     });
@@ -328,6 +333,10 @@ function DegreePlanView() {
   const [isCourseDetailModalOpen, setIsCourseDetailModalOpen] = useState(false);
   const [detailedCourseInfo, setDetailedCourseInfo] = useState<RawCourseData | null>(null);
 
+  // State for Rule Editor Modal
+  const [isRuleEditorModalOpen, setIsRuleEditorModalOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<DegreeRule | null>(null);
+
   const [isLoading, setIsLoading] = useState<boolean>(true); // Loading state
 
   const handleAddCourseToSemesterCallback = useCallback((semesterNumber: number) => {
@@ -432,6 +441,46 @@ function DegreePlanView() {
       setIsCourseDetailModalOpen(true);
     }
   }, [allCourses]);
+
+  // Rule Editor Handlers
+  const handleOpenRuleEditor = useCallback((ruleId: string) => {
+    if (currentTemplate && currentTemplate.rules) {
+      const ruleToEdit = currentTemplate.rules.find(r => r.id === ruleId);
+      if (ruleToEdit) {
+        setEditingRule(ruleToEdit);
+        setIsRuleEditorModalOpen(true);
+      } else {
+        console.warn(`Rule with id ${ruleId} not found.`);
+      }
+    }
+  }, [currentTemplate]);
+
+  const handleCloseRuleEditor = useCallback(() => {
+    setEditingRule(null);
+    setIsRuleEditorModalOpen(false);
+  }, []);
+
+  const handleSaveRule = useCallback((updatedRule: DegreeRule) => {
+    setCurrentTemplate(prevTemplate => {
+      if (!prevTemplate || !prevTemplate.rules) return prevTemplate;
+      const updatedRules = prevTemplate.rules.map(r => 
+        r.id === updatedRule.id ? updatedRule : r
+      );
+      return { ...prevTemplate, rules: updatedRules };
+    });
+    handleCloseRuleEditor();
+  }, [setCurrentTemplate, handleCloseRuleEditor]);
+
+  const handleDeleteRule = useCallback((ruleId: string) => {
+    // Consider adding a window.confirm here for user confirmation
+    if (window.confirm("האם אתה בטוח שברצונך למחוק כלל זה?")) {
+      setCurrentTemplate(prevTemplate => {
+        if (!prevTemplate || !prevTemplate.rules) return prevTemplate;
+        const updatedRules = prevTemplate.rules.filter(r => r.id !== ruleId);
+        return { ...prevTemplate, rules: updatedRules };
+      });
+    }
+  }, [setCurrentTemplate]);
 
   // Save/Load Callbacks
   const handleSavePlan = useCallback((slotId: number) => {
@@ -583,14 +632,16 @@ function DegreePlanView() {
       handleGradeChangeCallback,
       handleRemoveCourseCallback,
       initialMandatoryCourseIdsFromTemplateDefinition,
-      handleCourseNodeDoubleClick
+      handleCourseNodeDoubleClick,
+      handleOpenRuleEditor,
+      handleDeleteRule
     );
     const newEdges = transformDataToEdges(currentTemplate, allCourses);
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
     // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
     setEdges(newEdges); // This sets the base edges
-  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, initialMandatoryCourseIdsFromTemplateDefinition, handleCourseNodeDoubleClick]);
+  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, initialMandatoryCourseIdsFromTemplateDefinition, handleCourseNodeDoubleClick, handleOpenRuleEditor, handleDeleteRule]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);
@@ -647,6 +698,13 @@ function DegreePlanView() {
         isOpen={isCourseDetailModalOpen}
         onClose={() => setIsCourseDetailModalOpen(false)}
         course={detailedCourseInfo}
+        allCourses={allCourses}
+      />
+      <RuleEditorModal
+        isOpen={isRuleEditorModalOpen}
+        rule={editingRule}
+        onClose={handleCloseRuleEditor}
+        onSave={handleSaveRule}
         allCourses={allCourses}
       />
       <AveragesDisplay
