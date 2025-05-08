@@ -5,6 +5,6 @@ export const numberToHebrewLetter = (num: number): string => {
     'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 
     'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ', 'ק', 'ר', 'ש', 'ת'
   ];
-  if (num > letters.length) return num.toString(); // Fallback for numbers > 22
-  return letters[num - 1];
+  if (num > letters.length) return num.toString() + '׳'; // Fallback for numbers > 22, also add Geresh
+  return letters[num - 1] + '׳'; // Add Geresh
 }; 

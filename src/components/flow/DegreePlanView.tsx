@@ -56,7 +56,8 @@ const transformDataToNodes = (
   onAddCourseToSemesterCallback: (semesterNumber: number) => void,
   onAddSemesterCallbackParam: () => void,
   onGradeChangeCallback: (courseId: string, grade: string) => void,
-  onRemoveCourseCallback: (courseId: string) => void
+  onRemoveCourseCallback: (courseId: string) => void,
+  initialMandatoryCourseIds?: string[]
 ): AppNode[] => {
   if (!template || typeof template.semesters !== 'object' || template.semesters === null) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
@@ -98,7 +99,8 @@ const transformDataToNodes = (
         grades,
         allCourses,
         template.semesters,
-        template["courses-lists"]
+        template["courses-lists"],
+        initialMandatoryCourseIds
       );
       const nodeId = `rule-${rule.id || index}`;
       const firstSemesterXPos = baseSemesterAreaStartX + (maxSemesterNum > 0 ? (maxSemesterNum - 1) : 0) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
@@ -312,6 +314,7 @@ function DegreePlanView() {
   // State for loaded data
   const [allCourses, setAllCourses] = useState<RawCourseData[]>([]);
   const [currentTemplate, setCurrentTemplate] = useState<DegreeTemplate | undefined>(undefined);
+  const [initialMandatoryCourseIdsFromTemplateDefinition, setInitialMandatoryCourseIdsFromTemplateDefinition] = useState<string[] | undefined>(undefined); // NEW STATE
   const [grades, setGrades] = useState<Record<string, string>>({});
 
   // State for course selection modal
@@ -427,6 +430,12 @@ function DegreePlanView() {
     const loadedPlan = loadPlanFromSlot(slotId);
     if (loadedPlan) {
       setCurrentTemplate(loadedPlan.template);
+      // Populate initial mandatory course IDs from the loaded template's semesters
+      if (loadedPlan.template && typeof loadedPlan.template.semesters === 'object' && loadedPlan.template.semesters !== null) {
+        setInitialMandatoryCourseIdsFromTemplateDefinition(Object.values(loadedPlan.template.semesters).flat());
+      } else {
+        setInitialMandatoryCourseIdsFromTemplateDefinition(undefined);
+      }
       setGrades(loadedPlan.grades);
       alert(`Plan loaded from Slot ${slotId}`);
     } else {
@@ -445,6 +454,8 @@ function DegreePlanView() {
       
       const activeId = getActivePlanId();
       let loadedSuccessfully = false;
+      let templateForInitialMandatoryIds: DegreeTemplate | undefined = undefined;
+
       if (activeId !== null) {
         console.log(`[DegreePlanView] Initial Load: Attempting to load active plan from slot: ${activeId}`);
         const loadedPlan = loadPlanFromSlot(activeId);
@@ -452,6 +463,7 @@ function DegreePlanView() {
         if (loadedPlan) {
           setCurrentTemplate(loadedPlan.template);
           setGrades(loadedPlan.grades);
+          templateForInitialMandatoryIds = loadedPlan.template;
           loadedSuccessfully = true;
           console.log("[DegreePlanView] Initial Load: Successfully loaded plan from slot. currentTemplate:", loadedPlan.template);
         }
@@ -464,12 +476,21 @@ function DegreePlanView() {
         console.log("[DegreePlanView] Initial Load: First template ID:", firstTemplateId);
         if (firstTemplateId && degreeData[firstTemplateId]) {
           setCurrentTemplate(degreeData[firstTemplateId]);
+          templateForInitialMandatoryIds = degreeData[firstTemplateId];
           console.log("[DegreePlanView] Initial Load: Set currentTemplate to default:", degreeData[firstTemplateId]);
         } else {
           console.warn("[DegreePlanView] Initial Load: No default template found or degreeData is empty.");
         }
         setGrades({});
       }
+
+      // Set initial mandatory course IDs based on the loaded/default template
+      if (templateForInitialMandatoryIds && typeof templateForInitialMandatoryIds.semesters === 'object' && templateForInitialMandatoryIds.semesters !== null) {
+        setInitialMandatoryCourseIdsFromTemplateDefinition(Object.values(templateForInitialMandatoryIds.semesters).flat());
+      } else {
+        setInitialMandatoryCourseIdsFromTemplateDefinition(undefined);
+      }
+
       setIsLoading(false);
       console.log("[DegreePlanView] Initial Load: Finished. isLoading: false");
     };
@@ -518,7 +539,7 @@ function DegreePlanView() {
   // useEffect to update nodes/edges when data changes (MAIN EFFECT)
   useEffect(() => {
     console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. Dependencies changed.");
-    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", currentTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array');
+    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", currentTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array', "initialMandatoryCourseIds:", initialMandatoryCourseIdsFromTemplateDefinition);
     
     if (isLoading || !currentTemplate || !Array.isArray(allCourses) || allCourses.length === 0) {
       console.log("[DegreePlanView] Node/Edge Update Effect: Guarded. Not generating nodes/edges yet.");
@@ -543,14 +564,15 @@ function DegreePlanView() {
       handleAddCourseToSemesterCallback,
       handleAddSemesterCallback,
       handleGradeChangeCallback,
-      handleRemoveCourseCallback
+      handleRemoveCourseCallback,
+      initialMandatoryCourseIdsFromTemplateDefinition
     );
     const newEdges = transformDataToEdges(currentTemplate, allCourses);
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
     // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
     setEdges(newEdges); // This sets the base edges
-  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading]);
+  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, initialMandatoryCourseIdsFromTemplateDefinition]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);

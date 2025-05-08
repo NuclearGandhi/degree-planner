@@ -23,8 +23,9 @@ export function evaluateRule(
   coursesInPlan: RawCourseData[], // List of RawCourseData objects currently in the student's plan
   grades: Record<string, string>, // courseId: grade string
   allCoursesData: RawCourseData[], // All available course data (for looking up details of courses in lists)
-  templateSemesters: Record<string, string[]>, // Mandatory courses from template
-  degreeCourseLists?: Record<string, string[] | number[]> // Adjusted type
+  templateSemesters: Record<string, string[]>, // Mandatory courses from template (CURRENTLY LIVE SEMESTERS, used by other rules perhaps)
+  degreeCourseLists?: Record<string, string[] | number[]>, // Adjusted type
+  initialTemplateMandatoryCourseIds?: string[] // NEW: IDs from the original template's semester definition
 ): EvaluatedRuleStatus {
   let currentProgressString = "N/A";
   let isSatisfied = false;
@@ -134,15 +135,15 @@ export function evaluateRule(
       break;
 
     case 'minCreditsFromMandatory':
-      if (rule.min !== undefined && templateSemesters) {
-        const mandatoryCourseIds = new Set(Object.values(templateSemesters).flat());
-        const mandatoryCoursesInPlan = coursesInPlan.filter(cp => mandatoryCourseIds.has(cp._id));
-        currentValue = mandatoryCoursesInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+      if (rule.min !== undefined && initialTemplateMandatoryCourseIds) {
+        const mandatoryCourseIds = new Set(initialTemplateMandatoryCourseIds);
+        const mandatoryCoursesActuallyInPlan = coursesInPlan.filter(cp => mandatoryCourseIds.has(cp._id));
+        currentValue = mandatoryCoursesActuallyInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
         requiredValue = rule.min;
         currentProgressString = `${currentValue}/${requiredValue} נ"ז (חובה)`;
         isSatisfied = currentValue >= requiredValue;
       } else {
-        currentProgressString = "כלל 'minCreditsFromMandatory' לא הוגדר כראוי.";
+        currentProgressString = "כלל 'minCreditsFromMandatory' לא הוגדר כראוי (חסר 'min' או הגדרת קורסי חובה ראשונית).";
       }
       break;
 
