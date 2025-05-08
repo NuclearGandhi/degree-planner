@@ -39,15 +39,31 @@
         "min": 157.5 
       },
       {
-        "id": "list_a_min_courses",
-        "description": "לפחות קורס 1 מרשימה א'",
-        "type": "minCoursesFromList",
-        "listName": "רשימה א'",
-        "min": 1
+        "id": "selective_lists_rule",
+        "description": "קורסים מרשימות בחירה",
+        "type": "minCoursesFromMultipleLists",
+        "lists": [
+          { "listName": "רשימה א'", "min": 1 },
+          { "listName": "רשימה ב'", "min": 2 },
+          { "listName": "רשימה ג'", "min": 2 },
+          { "listName": "רשימה ד'", "min": 2 },
+          { "listName": "רשימה ה'", "min": 2 }
+        ]
+      },
+      {
+        "id": "mandatory_credits_rule",
+        "description": "נקודות חובה",
+        "type": "minCreditsFromMandatory",
+        "min": 109.5
+      },
+      {
+        "id": "selective_credits_rule",
+        "description": "נקודות בחירה",
+        "type": "minCreditsFromAnySelectiveList",
+        "min": 30
       }
     ],
     "courses-lists": {
-      "must-take-min-num-of-courses": [1, 2, 2, 2, 2],
       "רשימה א'": ["00350022", "00360015", "00350199", "00350013", "00350039"],
       "רשימה ב'": [
         "00350035",

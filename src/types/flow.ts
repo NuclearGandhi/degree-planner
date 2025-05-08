@@ -19,6 +19,15 @@ export interface RuleNodeData {
   description: string;
   currentProgress: string;
   isSatisfied: boolean;
+  currentValue?: number | null;
+  requiredValue?: number | null;
+  // Optional details for multi-list rules
+  listProgressDetails?: { 
+    listName: string; 
+    currentValue: number; 
+    requiredValue: number; 
+    isSatisfied: boolean; 
+  }[] | null;
   [key: string]: unknown;
 }
 

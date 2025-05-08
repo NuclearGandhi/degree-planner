@@ -32,10 +32,11 @@ export interface CourseListRule {
 export interface DegreeRule {
   id: string;
   description: string;
-  type: 'total_credits' | 'credits_from_list' | 'min_grade' | 'minCredits' | 'minCoursesFromList' | string;
+  type: 'total_credits' | 'credits_from_list' | 'min_grade' | 'minCredits' | 'minCoursesFromList' | 'minCoursesFromMultipleLists' | 'minCreditsFromMandatory' | 'minCreditsFromAnySelectiveList' | string;
   required_credits?: number;
   course_list_name?: string;
   listName?: string;
+  lists?: { listName: string; min: number }[];
   min_grade_value?: number;
   courses_for_min_grade?: string[];
   min?: number;
