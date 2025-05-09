@@ -62,6 +62,7 @@ export interface DegreeTemplate {
   semesters: Record<string, string[]>; 
   rules?: DegreeRule[]; 
   "courses-lists"?: Record<string, string[]>;
+  "semester-names"?: Record<string, string>;
   definedMandatoryCourseIds?: string[]; // New field for the independent list of mandatory courses
 }
 

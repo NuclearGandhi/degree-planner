@@ -22,7 +22,7 @@ import SemesterTitleNode from './customNodes/SemesterTitleNode';
 import { CourseSelectionModal } from '../../components/ui/CourseSelectionModal';
 import { fetchAllCourses, fetchDegreeTemplates } from '../../utils/dataLoader';
 import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, PrerequisiteGroup } from '../../types/data';
-import { AppNode, AppEdge } from '../../types/flow';
+import { AppNode, AppEdge, RuleNodeData } from '../../types/flow';
 import { evaluateRule } from '../../utils/ruleEvaluator';
 import { AveragesDisplay } from '../../components/ui/AveragesDisplay';
 import { savePlan, loadPlan } from '../../utils/planStorage';
@@ -34,6 +34,7 @@ import RuleEditorModal from '../../components/ui/RuleEditorModal';
 import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
 import { Logo } from '../../components/ui/Logo';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
+import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
 
 const nodeTypes = {
   course: CourseNode,
@@ -43,16 +44,17 @@ const nodeTypes = {
   semesterTitle: SemesterTitleNode,
 };
 
-const COLUMN_WIDTH = 300; // Increased width of a semester column
+const COLUMN_WIDTH = 340; // Increased from 300
 const NODE_HEIGHT_COURSE = 90; // Increased approximate height of a course node
 // const NODE_HEIGHT_RULE = 70; // No longer used directly, height is estimated
 const VERTICAL_SPACING_RULE = 60; // Further increased vertical spacing, was 40
 const HORIZONTAL_SPACING_SEMESTER = 75; // New: Spacing between semester columns
-const SEMESTER_TOP_MARGIN = 100; // Further increased space below rules / above semester titles
+const SEMESTER_TOP_MARGIN = 120; // Increased from 100
 const ADD_SEMESTER_NODE_ID = 'add-new-semester-button';
 const MAX_SEMESTERS = 16;
 const SEMESTER_TITLE_HEIGHT = 40; // Approximate height for the title node + spacing
 const MANDATORY_COURSES_LIST_KEY = "רשימת קורסי חובה";
+const CONSOLIDATED_RULES_NODE_ID = 'consolidated-rules-node';
 
 type SaveStatus = 'idle' | 'saving' | 'saved'; // New type for save status
 
@@ -77,60 +79,122 @@ const transformDataToNodes = (
   }
 
   const flowNodes: AppNode[] = [];
-  let currentContentY = VERTICAL_SPACING_RULE; // Initial Y for the topmost content
-  let maxEstimatedRuleHeight = 0; // Track max height in the rule row
-  const ruleRowStartY = currentContentY; // Capture the starting Y for the rule row
+  let currentContentY = VERTICAL_SPACING_RULE;
+  let maxEstimatedRuleHeight = 0;
+  const ruleRowStartY = currentContentY;
 
   const allCourseIdsInTemplate = Object.values(template.semesters).flat();
   const coursesInCurrentPlan = (Array.isArray(allCourses) ? allCourseIdsInTemplate
     .map(courseId => allCourses.find(c => c._id === courseId))
     .filter(Boolean) : []) as RawCourseData[];
 
-  // --- Move Semester Calculations Up ---
   const semesterEntries = Object.entries(template.semesters);
   const numExistingSemesters = semesterEntries.length;
-  const maxSemesterNum = numExistingSemesters > 0 ? Math.max(...semesterEntries.map((_, i) => i + 1)) : 0; // Use 1-based index for max
+  const maxSemesterNum = numExistingSemesters > 0 ? Math.max(...semesterEntries.map((_, i) => i + 1)) : 0;
   const addSemesterNodeIsVisible = numExistingSemesters < MAX_SEMESTERS;
-  const baseSemesterAreaStartX = addSemesterNodeIsVisible ? COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER : 0; 
-  // --- End Moved Calculations ---
+  const baseSemesterAreaStartX = addSemesterNodeIsVisible ? COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER : 0;
+  const firstSemesterXPos = baseSemesterAreaStartX + (maxSemesterNum > 0 ? (maxSemesterNum - 1) : 0) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
+
+  const ruleNodeBaseXAdjustment = 98;
 
   if (template.rules && Array.isArray(template.rules) && template.rules.length > 0) {
-    template.rules.forEach((rule: DegreeRule, index: number) => {
-      // Log the rule object being processed
-      console.log(`[transformDataToNodes] Processing Rule:`, rule);
-      if (!rule || typeof rule.id === 'undefined' || typeof rule.description === 'undefined') {
-        console.warn(`[transformDataToNodes] Skipping rule at index ${index} due to missing id or description:`, rule);
-        return; // Skip potentially invalid rule object
-      }
+    const rulesToConsolidate: DegreeRule[] = [];
+    const otherRules: DegreeRule[] = [];
+    const consolidatedRuleTypes = new Set([
+      'total_credits', 
+      'credits_from_list', 
+      'min_grade', 
+      'minCredits', 
+      'minCoursesFromList',
+      'minCreditsFromMandatory',
+      'minCreditsFromAnySelectiveList'
+    ]);
 
-      const ruleStatus = evaluateRule(
-        rule,
-        coursesInCurrentPlan,
-        grades,
-        allCourses,
-        template.semesters,
-        template["courses-lists"],
-        initialMandatoryCourseIds
-      );
-      const nodeId = `rule-${rule.id || index}`;
-      const firstSemesterXPos = baseSemesterAreaStartX + (maxSemesterNum > 0 ? (maxSemesterNum - 1) : 0) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
-      const nodePosition = { x: firstSemesterXPos - index * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY }; // All rules start at the same Y
+    template.rules.forEach(rule => {
+      if (!rule || typeof rule.id === 'undefined' || typeof rule.description === 'undefined') {
+        console.warn(`[transformDataToNodes] Skipping rule due to missing id or description:`, rule);
+        return;
+      }
+      if (consolidatedRuleTypes.has(rule.type)) {
+        rulesToConsolidate.push(rule);
+      } else {
+        otherRules.push(rule);
+      }
+    });
+
+    let ruleNodeXOffset = 0;
+
+    // Create the consolidated rule node if there are any rules to consolidate
+    if (rulesToConsolidate.length > 0) {
+      const consolidatedNodeId = CONSOLIDATED_RULES_NODE_ID;
+      const consolidatedRuleDetails: RuleNodeData['consolidatedRules'] = [];
+      let allConsolidatedSatisfied = true;
+
+      rulesToConsolidate.forEach(rule => {
+        const ruleStatus = evaluateRule(
+          rule, coursesInCurrentPlan, grades, allCourses,
+          template.semesters, template["courses-lists"], initialMandatoryCourseIds
+        );
+        consolidatedRuleDetails!.push({
+          id: rule.id,
+          description: rule.description,
+          currentProgress: ruleStatus.currentProgressString,
+          isSatisfied: ruleStatus.isSatisfied,
+          currentValue: ruleStatus.currentValue,
+          requiredValue: ruleStatus.requiredValue,
+        });
+        if (!ruleStatus.isSatisfied) {
+          allConsolidatedSatisfied = false;
+        }
+      });
       
-      // Estimate height for vertical spacing calculation
-      let estimatedHeight = 120; // Default based on min-h-[120px]
+      // Base height for title + padding, then add height per sub-rule
+      // Each sub-rule: description (sm), progress text (xs), progress bar (h-2.5), buttons (xs), padding (py-1.5)
+      // Estimate ~60px per sub-rule to be safe with spacing and potential text wrapping.
+      const estimatedHeightConsolidated = 60 + consolidatedRuleDetails!.length * 60; 
+      maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeightConsolidated);
+
+      flowNodes.push({
+        id: consolidatedNodeId,
+        type: 'rule',
+        position: { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - ruleNodeXOffset * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY },
+        data: {
+          id: consolidatedNodeId,
+          description: "התקדמות אקדמית כללית", // Changed title
+          currentProgress: `${consolidatedRuleDetails!.filter((r: NonNullable<RuleNodeData['consolidatedRules']>[number]) => r.isSatisfied).length} / ${consolidatedRuleDetails!.length} תתי-כללים הושלמו`,
+          isSatisfied: allConsolidatedSatisfied,
+          consolidatedRules: consolidatedRuleDetails,
+          onEditRule: onEditRuleCallback,
+          onDeleteRule: onDeleteRuleCallback,
+        },
+      });
+      ruleNodeXOffset++;
+    }
+
+    // Create nodes for other rules (e.g., minCoursesFromMultipleLists)
+    otherRules.forEach((rule) => {
+      const ruleStatus = evaluateRule(
+        rule, coursesInCurrentPlan, grades, allCourses,
+        template.semesters, template["courses-lists"], initialMandatoryCourseIds
+      );
+      const nodeId = `rule-${rule.id}`;
+      const nodePosition = { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - ruleNodeXOffset * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY };
+      ruleNodeXOffset++;
+
+      let estimatedHeight = 120; // Default for other rule types
       if (rule.type === 'minCoursesFromMultipleLists' && rule.lists) {
-          // Rough estimate: 60px base + 20px per list item
-          estimatedHeight = 60 + (rule.lists.length * 20); 
+        // Estimate: base height + per list item (description text-sm, progress text-xs, mini-bar h-2)
+        // Each item approx 45-50px. Using 50 for safety.
+        estimatedHeight = 70 + (rule.lists.length * 50); 
       }
       maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeight);
 
-      console.log(`[transformDataToNodes] Creating Rule Node: ID=${nodeId}, Position=`, nodePosition);
       flowNodes.push({
         id: nodeId,
         type: 'rule',
         position: nodePosition,
         data: {
-          id: rule.id || `rule_data_${index}`,
+          id: rule.id,
           description: rule.description,
           currentProgress: ruleStatus.currentProgressString,
           isSatisfied: ruleStatus.isSatisfied,
@@ -142,10 +206,8 @@ const transformDataToNodes = (
         },
       });
     });
-    // Advance Y below the rule area based on the tallest rule + margin
-    currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN; 
+    currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
   } else {
-    // If no rules, ensure minimum top margin
     currentContentY = Math.max(currentContentY, SEMESTER_TOP_MARGIN);
   }
 
@@ -318,15 +380,15 @@ const transformDataToEdges = (
 };
 
 function DegreePlanView() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode[]>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<AppNode[]>([]); // Added state for selected nodes
   
   const { theme } = useTheme();
 
   // State for loaded data
   const [allCourses, setAllCourses] = useState<RawCourseData[]>([]);
-  const [currentTemplate, setCurrentTemplate] = useState<DegreeTemplate | undefined>(undefined);
+  const [degreeTemplate, setDegreeTemplate] = useState<DegreeTemplate | undefined>(undefined);
   const [grades, setGrades] = useState<Record<string, string>>({});
 
   // State for course selection modal
@@ -339,10 +401,14 @@ function DegreePlanView() {
 
   // State for Rule Editor Modal
   const [isRuleEditorModalOpen, setIsRuleEditorModalOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<DegreeRule | null>(null);
+  const [currentRuleForEditing, setCurrentRuleForEditing] = useState<DegreeRule | null>(null);
 
   // State for Course List Editor Modal
   const [isCourseListEditorModalOpen, setIsCourseListEditorModalOpen] = useState(false);
+
+  // State for ConsolidatedRuleEditorModal
+  const [isConsolidatedRuleModalOpen, setIsConsolidatedRuleModalOpen] = useState(false);
+  const [rulesForConsolidatedEditing, setRulesForConsolidatedEditing] = useState<DegreeRule[]>([]);
 
   const [isLoading, setIsLoading] = useState<boolean>(true); // Loading state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -356,7 +422,7 @@ function DegreePlanView() {
 
   const handleAddSemesterCallback = useCallback(() => {
     console.log('DegreePlanView: Add new semester');
-    setCurrentTemplate(prevTemplate => {
+    setDegreeTemplate(prevTemplate => {
       if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate; // Guard clause
       const semesterKeys = Object.keys(prevTemplate.semesters);
       if (semesterKeys.length >= MAX_SEMESTERS) return prevTemplate;
@@ -375,9 +441,9 @@ function DegreePlanView() {
   }, []);
 
   const handleSelectCourseFromModal = useCallback((selectedCourse: RawCourseData) => {
-    if (targetSemesterForModal === null || !currentTemplate) return;
+    if (targetSemesterForModal === null || !degreeTemplate) return;
 
-    setCurrentTemplate(prevTemplate => {
+    setDegreeTemplate(prevTemplate => {
       if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate;
 
       const semesterEntries = Object.entries(prevTemplate.semesters);
@@ -402,7 +468,7 @@ function DegreePlanView() {
     });
     setIsModalOpen(false);
     setTargetSemesterForModal(null);
-  }, [targetSemesterForModal, currentTemplate]);
+  }, [targetSemesterForModal, degreeTemplate]);
 
   const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
@@ -421,7 +487,7 @@ function DegreePlanView() {
   // Callback for handling course removal
   const handleRemoveCourseCallback = useCallback((courseIdToRemove: string) => {
     console.log(`DegreePlanView: Remove course: ${courseIdToRemove}`);
-    setCurrentTemplate(prevTemplate => {
+    setDegreeTemplate(prevTemplate => {
       if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return undefined;
 
       const updatedSemesters: Record<string, string[]> = {};
@@ -439,7 +505,7 @@ function DegreePlanView() {
     // Clear selection if the removed node was selected
     setSelectedNodes(prevSelected => prevSelected.filter(node => node.id !== courseIdToRemove)); 
     // Alternatively, to clear all selection: setSelectedNodes([]);
-  }, [setCurrentTemplate, setGrades, setSelectedNodes]); // Added setSelectedNodes to dependencies
+  }, [setDegreeTemplate, setGrades, setSelectedNodes]); // Added setSelectedNodes to dependencies
 
   // Callback for course node double-click
   const handleCourseNodeDoubleClick = useCallback((courseId: string) => {
@@ -453,42 +519,39 @@ function DegreePlanView() {
 
   // Rule Editor Handlers
   const handleOpenRuleEditor = useCallback((ruleId: string) => {
-    if (currentTemplate && currentTemplate.rules) {
-      const ruleToEdit = currentTemplate.rules.find(r => r.id === ruleId);
+    if (degreeTemplate && degreeTemplate.rules) {
+      const ruleToEdit = degreeTemplate.rules.find(r => r.id === ruleId);
       if (ruleToEdit) {
-        setEditingRule(ruleToEdit);
+        setCurrentRuleForEditing(ruleToEdit);
         setIsRuleEditorModalOpen(true);
       } else {
         console.warn(`Rule with id ${ruleId} not found.`);
       }
     }
-  }, [currentTemplate]);
+  }, [degreeTemplate]);
 
   const handleCloseRuleEditor = useCallback(() => {
-    setEditingRule(null);
+    setCurrentRuleForEditing(null);
     setIsRuleEditorModalOpen(false);
   }, []);
 
   const handleSaveRule = useCallback((updatedRule: DegreeRule) => {
-    setCurrentTemplate(prevTemplate => {
-      if (!prevTemplate || !prevTemplate.rules) return prevTemplate;
-      const updatedRules = prevTemplate.rules.map(r => 
-        r.id === updatedRule.id ? updatedRule : r
-      );
-      return { ...prevTemplate, rules: updatedRules };
-    });
+    if (!degreeTemplate) return;
+    const updatedRules = degreeTemplate.rules.map(r => r.id === updatedRule.id ? updatedRule : r);
+    const newDegreeTemplate = { ...degreeTemplate, rules: updatedRules };
+    setDegreeTemplate(newDegreeTemplate);
     handleCloseRuleEditor();
-  }, [setCurrentTemplate, handleCloseRuleEditor]);
+  }, [degreeTemplate, handleCloseRuleEditor]);
 
   const handleDeleteRule = useCallback((ruleId: string) => {
     if (window.confirm("האם אתה בטוח שברצונך למחוק כלל זה?")) {
-      setCurrentTemplate(prevTemplate => {
+      setDegreeTemplate(prevTemplate => {
         if (!prevTemplate || !prevTemplate.rules) return prevTemplate;
         const updatedRules = prevTemplate.rules.filter(r => r.id !== ruleId);
         return { ...prevTemplate, rules: updatedRules };
       });
     }
-  }, [setCurrentTemplate]);
+  }, [setDegreeTemplate]);
 
   // Callback for Course List Editor Modal
   const handleToggleCourseListEditorModal = useCallback(() => {
@@ -497,7 +560,7 @@ function DegreePlanView() {
 
   // Callback for saving updated course lists
   const handleSaveCourseLists = useCallback((allListsFromModal: Record<string, string[]>) => {
-    setCurrentTemplate(prevTemplate => {
+    setDegreeTemplate(prevTemplate => {
       if (!prevTemplate) return undefined;
 
       // Handle the mandatory courses list
@@ -524,7 +587,49 @@ function DegreePlanView() {
       };
     });
     setIsCourseListEditorModalOpen(false); // Explicitly close modal here
-  }, [setCurrentTemplate, setIsCourseListEditorModalOpen]);
+  }, [setDegreeTemplate, setIsCourseListEditorModalOpen]);
+
+  // Callback for editing consolidated rules
+  const handleEditRule = useCallback((ruleId: string) => {
+    if (!degreeTemplate || !degreeTemplate.rules) return;
+
+    if (ruleId === CONSOLIDATED_RULES_NODE_ID) {
+      const consolidatedRuleTypes = new Set([
+        'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
+        'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList'
+      ]);
+      const rulesToEdit = degreeTemplate.rules.filter(rule => consolidatedRuleTypes.has(rule.type));
+      if (rulesToEdit.length > 0) {
+        setRulesForConsolidatedEditing(rulesToEdit);
+        setIsConsolidatedRuleModalOpen(true);
+      } else {
+        console.warn("Consolidated rule node edit triggered, but no matching rules found in template.");
+      }
+    } else {
+      const ruleToEdit = degreeTemplate.rules.find(r => r.id === ruleId);
+      if (ruleToEdit) {
+        setCurrentRuleForEditing(ruleToEdit);
+        setIsRuleEditorModalOpen(true);
+      } else {
+        console.warn(`Rule with ID ${ruleId} not found for editing.`);
+      }
+    }
+  }, [degreeTemplate]);
+
+  // Callback for saving consolidated rules
+  const handleSaveConsolidatedRules = useCallback((updatedRules: DegreeRule[]) => {
+    if (!degreeTemplate || !degreeTemplate.rules) return;
+
+    const ruleMap = new Map(updatedRules.map(rule => [rule.id, rule]));
+    const newRulesArray = degreeTemplate.rules.map(originalRule => 
+      ruleMap.has(originalRule.id) ? ruleMap.get(originalRule.id)! : originalRule
+    );
+
+    const newDegreeTemplate = { ...degreeTemplate, rules: newRulesArray };
+    setDegreeTemplate(newDegreeTemplate);
+    setIsConsolidatedRuleModalOpen(false);
+    setRulesForConsolidatedEditing([]);
+  }, [degreeTemplate]);
 
   // Initial Load Effect
   useEffect(() => {
@@ -568,7 +673,7 @@ function DegreePlanView() {
         console.log("[DegreePlanView] Initial Load: Populated definedMandatoryCourseIds from semesters:", templateForProcessing.definedMandatoryCourseIds);
       }
       
-      setCurrentTemplate(templateForProcessing);
+      setDegreeTemplate(templateForProcessing);
       setGrades(gradesToSet);
       console.log("[DegreePlanView] Initial Load: Final currentTemplate set:", templateForProcessing, "Grades set:", gradesToSet);
 
@@ -580,7 +685,7 @@ function DegreePlanView() {
 
   // Autosave Effect
   useEffect(() => {
-    if (isLoading || !currentTemplate) {
+    if (isLoading || !degreeTemplate) {
       // If loading or no template, and we were in the process of saving (status was 'saving'),
       // reset to 'idle'. If it was already 'saved', let it persist.
       if (saveStatus === 'saving') {
@@ -607,8 +712,8 @@ function DegreePlanView() {
     autosaveTimeoutRef.current = window.setTimeout(() => {
       console.log("[DegreePlanView] Autosave: Debounce timeout reached. Saving plan...");
       // Re-check currentTemplate inside timeout, as it's part of the closure
-      if (currentTemplate) { 
-        savePlan(currentTemplate, grades);
+      if (degreeTemplate) { 
+        savePlan(degreeTemplate, grades);
         setSaveStatus('saved'); 
         console.log("[DegreePlanView] Autosave: Plan saved. Status: saved.");
       } else {
@@ -625,7 +730,7 @@ function DegreePlanView() {
         autosaveTimeoutRef.current = null; // Ensure ref is cleared on cleanup
       }
     };
-  }, [currentTemplate, grades, isLoading]); // Removed saveStatus from dependencies
+  }, [degreeTemplate, grades, isLoading]); // Removed saveStatus from dependencies
 
   // New useEffect for styling edges based on selection
   useEffect(() => {
@@ -669,12 +774,12 @@ function DegreePlanView() {
   // useEffect to update nodes/edges when data changes (MAIN EFFECT)
   useEffect(() => {
     console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. Dependencies changed.");
-    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", currentTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array');
+    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", degreeTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array');
     
-    if (isLoading || !currentTemplate || !Array.isArray(allCourses) || allCourses.length === 0) {
+    if (isLoading || !degreeTemplate || !Array.isArray(allCourses) || allCourses.length === 0) {
       console.log("[DegreePlanView] Node/Edge Update Effect: Guarded. Not generating nodes/edges yet.");
       if (isLoading) console.log("Reason: isLoading is true.");
-      if (!currentTemplate) console.log("Reason: currentTemplate is falsy.");
+      if (!degreeTemplate) console.log("Reason: currentTemplate is falsy.");
       if (!Array.isArray(allCourses)) console.log("Reason: allCourses is not an array.");
       if (Array.isArray(allCourses) && allCourses.length === 0) console.log("Reason: allCourses is an empty array.");
       // Optionally, if nodes are empty and not loading, set them to empty to clear previous state
@@ -686,26 +791,26 @@ function DegreePlanView() {
       return;
     }
 
-    console.log("[DegreePlanView] Node/Edge Update Effect: Guard passed. Generating nodes and edges with currentTemplate:", currentTemplate, "and allCourses count:", allCourses.length);
+    console.log("[DegreePlanView] Node/Edge Update Effect: Guard passed. Generating nodes and edges with currentTemplate:", degreeTemplate, "and allCourses count:", allCourses.length);
     const newNodes = transformDataToNodes(
-      currentTemplate,
+      degreeTemplate,
       allCourses,
       grades,
       handleAddCourseToSemesterCallback,
       handleAddSemesterCallback,
       handleGradeChangeCallback,
       handleRemoveCourseCallback,
-      currentTemplate?.definedMandatoryCourseIds,
+      degreeTemplate?.definedMandatoryCourseIds,
       handleCourseNodeDoubleClick,
-      handleOpenRuleEditor,
+      handleEditRule,
       handleDeleteRule
     );
-    const newEdges = transformDataToEdges(currentTemplate, allCourses);
+    const newEdges = transformDataToEdges(degreeTemplate, allCourses);
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
     // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
     setEdges(newEdges); // This sets the base edges
-  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, handleCourseNodeDoubleClick, handleOpenRuleEditor, handleDeleteRule]);
+  }, [degreeTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, handleCourseNodeDoubleClick, handleEditRule, handleDeleteRule]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);
@@ -713,20 +818,20 @@ function DegreePlanView() {
 
   // Filter courses for modal: exclude those already in the current plan
   const availableCoursesForModal = useMemo(() => {
-    if (!currentTemplate || typeof currentTemplate.semesters !== 'object' || currentTemplate.semesters === null || !Array.isArray(allCourses)) {
-      if (currentTemplate && (typeof currentTemplate.semesters !== 'object' || currentTemplate.semesters === null)) {
-        console.warn('Data Structure Warning (availableCoursesForModal): currentTemplate.semesters is not an object!', currentTemplate.semesters);
+    if (!degreeTemplate || typeof degreeTemplate.semesters !== 'object' || degreeTemplate.semesters === null || !Array.isArray(allCourses)) {
+      if (degreeTemplate && (typeof degreeTemplate.semesters !== 'object' || degreeTemplate.semesters === null)) {
+        console.warn('Data Structure Warning (availableCoursesForModal): currentTemplate.semesters is not an object!', degreeTemplate.semesters);
       }
       return allCourses || []; // Return allCourses if valid, else empty array
     }
     const coursesInPlan = new Set<string>();
-    Object.values(currentTemplate.semesters).forEach(courseIds => {
+    Object.values(degreeTemplate.semesters).forEach(courseIds => {
       if (Array.isArray(courseIds)) {
         courseIds.forEach((cId: string) => coursesInPlan.add(cId));
       }
     });
     return allCourses.filter(course => !coursesInPlan.has(course._id));
-  }, [allCourses, currentTemplate]);
+  }, [allCourses, degreeTemplate]);
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
@@ -772,37 +877,46 @@ function DegreePlanView() {
       />
       <RuleEditorModal
         isOpen={isRuleEditorModalOpen}
-        rule={editingRule}
+        rule={currentRuleForEditing}
         onClose={handleCloseRuleEditor}
         onSave={handleSaveRule}
         allCourses={allCourses}
-        availableCourseListNames={currentTemplate && currentTemplate["courses-lists"] ? Object.keys(currentTemplate["courses-lists"]) : []}
+        availableCourseListNames={degreeTemplate && degreeTemplate["courses-lists"] ? Object.keys(degreeTemplate["courses-lists"]) : []}
       />
       <CourseListEditorModal
         isOpen={isCourseListEditorModalOpen}
         onClose={handleToggleCourseListEditorModal}
         allCourses={allCourses}
         currentCourseLists={useMemo(() => {
-          const lists = { ...(currentTemplate?.["courses-lists"] || {}) };
+          const lists = { ...(degreeTemplate?.["courses-lists"] || {}) };
           // Add the definedMandatoryCourseIds as a special list for the editor
-          if (currentTemplate && currentTemplate.definedMandatoryCourseIds) {
-            lists[MANDATORY_COURSES_LIST_KEY] = [...new Set(currentTemplate.definedMandatoryCourseIds)];
-          } else if (currentTemplate && typeof currentTemplate.semesters === 'object' && currentTemplate.semesters !== null) {
+          if (degreeTemplate && degreeTemplate.definedMandatoryCourseIds) {
+            lists[MANDATORY_COURSES_LIST_KEY] = [...new Set(degreeTemplate.definedMandatoryCourseIds)];
+          } else if (degreeTemplate && typeof degreeTemplate.semesters === 'object' && degreeTemplate.semesters !== null) {
             // Fallback for older data or if definedMandatoryCourseIds is somehow not set yet:
             // show current semester courses, but saving will create/update definedMandatoryCourseIds
             // This also ensures the list is shown even if definedMandatoryCourseIds is empty initially
-             const allMandatoryIdsFromSemesters = [...new Set(Object.values(currentTemplate.semesters).flat())];
+             const allMandatoryIdsFromSemesters = [...new Set(Object.values(degreeTemplate.semesters).flat())];
              lists[MANDATORY_COURSES_LIST_KEY] = allMandatoryIdsFromSemesters;
           } else {
             lists[MANDATORY_COURSES_LIST_KEY] = []; // Ensure the key exists for the modal
           }
           return lists;
-        }, [currentTemplate])}
+        }, [degreeTemplate])}
         onSaveCourseLists={handleSaveCourseLists}
         mandatoryCoursesListKey={MANDATORY_COURSES_LIST_KEY}
       />
+      <ConsolidatedRuleEditorModal
+        isOpen={isConsolidatedRuleModalOpen}
+        rules={rulesForConsolidatedEditing}
+        onClose={() => {
+          setIsConsolidatedRuleModalOpen(false);
+          setRulesForConsolidatedEditing([]);
+        }}
+        onSave={handleSaveConsolidatedRules}
+      />
       <AveragesDisplay
-        currentTemplate={currentTemplate}
+        currentTemplate={degreeTemplate}
         allCourses={allCourses}
         grades={grades}
       />

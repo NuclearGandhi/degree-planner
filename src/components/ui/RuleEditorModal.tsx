@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DegreeRule, RawCourseData } from '../../types/data';
+// import { DegreeRule, RawCourseData } from '../../types/data'; // RawCourseData removed
+import { DegreeRule } from '../../types/data';
 import BaseModal from './BaseModal';
 
 // For minCoursesFromMultipleLists items during editing
@@ -14,7 +15,6 @@ interface RuleEditorModalProps {
   rule: DegreeRule | null;
   onClose: () => void;
   onSave: (updatedRule: DegreeRule) => void;
-  allCourses: RawCourseData[]; // For potential future use with course selection
   availableCourseListNames: string[]; // New prop
 }
 
@@ -23,7 +23,6 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
   rule, 
   onClose, 
   onSave, 
-  allCourses, 
   availableCourseListNames 
 }) => {
   const [description, setDescription] = useState('');
@@ -48,7 +47,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
       setListRuleNumericValue(undefined);
       setMultiListItems([]); // Reset multi-list items
 
-      if (rule.type === 'total_credits' || rule.type === 'minCredits') {
+      if (rule.type === 'total_credits' || rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList') {
         setGeneralRequiredCredits(rule.required_credits ?? rule.min ?? undefined);
       } else if (rule.type === 'min_grade') {
         setMinGradeValue(rule.min_grade_value ?? undefined);
@@ -101,7 +100,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
 
     if (rule.type === 'total_credits') {
       updatedRule.required_credits = generalRequiredCredits;
-    } else if (rule.type === 'minCredits') {
+    } else if (rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList') {
       updatedRule.min = generalRequiredCredits;
     } else if (rule.type === 'min_grade') {
       updatedRule.min_grade_value = minGradeValue;
@@ -113,7 +112,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
       updatedRule.min = listRuleNumericValue;
     } else if (rule.type === 'minCoursesFromMultipleLists') {
       // Convert EditableListItem back to the format expected by DegreeRule, removing temporary id
-      updatedRule.lists = multiListItems.map(({ id, ...rest }) => rest);
+      updatedRule.lists = multiListItems.map(({ /* id, */ ...rest }) => rest);
     }
     // TODO: Add saving logic for other rule types
 
@@ -170,14 +169,14 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
           />
         </div>
 
-        {(rule.type === 'total_credits' || rule.type === 'minCredits') && (
+        {(rule.type === 'total_credits' || rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList') && (
           <div className="mb-4">
-            <label htmlFor="generalRequiredCredits" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              {rule.type === 'minCredits' ? 'מינימום נ"ז' : 'סה"כ נ"ז נדרשות'}
+            <label htmlFor="ruleNumericValueGeneral" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              ערך נדרש (נק"ז)
             </label>
             <input
               type="number"
-              id="generalRequiredCredits"
+              id="ruleNumericValueGeneral"
               value={generalRequiredCredits ?? ''}
               onChange={(e) => setGeneralRequiredCredits(e.target.value ? parseInt(e.target.value, 10) : undefined)}
               className={commonInputClass}
@@ -204,9 +203,11 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
         {(rule.type === 'credits_from_list' || rule.type === 'minCoursesFromList') && (
           <>
             <div className="mb-4">
-              <label htmlFor="courseListName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">שם רשימת קורסים</label>
+              <label htmlFor="ruleCourseListName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                שם רשימת הקורסים
+              </label>
               <select
-                id="courseListName"
+                id="ruleCourseListName"
                 value={selectedCourseListName}
                 onChange={(e) => setSelectedCourseListName(e.target.value)}
                 className={commonInputClass}
@@ -219,12 +220,12 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
               </select>
             </div>
             <div className="mb-4">
-              <label htmlFor="listRuleNumericValue" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                {rule.type === 'credits_from_list' ? 'נ"ז נדרשות מהרשימה' : 'מספר קורסים נדרש מהרשימה'}
+              <label htmlFor="ruleNumericValueList" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mt-2">
+                {rule.type === 'credits_from_list' ? 'נק"ז נדרשות מהרשימה' : 'מספר קורסים נדרש מהרשימה'}
               </label>
               <input
                 type="number"
-                id="listRuleNumericValue"
+                id="ruleNumericValueList"
                 value={listRuleNumericValue ?? ''}
                 onChange={(e) => setListRuleNumericValue(e.target.value ? parseInt(e.target.value, 10) : undefined)}
                 className={commonInputClass}
@@ -300,19 +301,6 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
           </div>
         )}
         
-        {/* Fallback for types not yet specifically handled for editing parameters */}
-        {!(rule.type === 'total_credits' || 
-           rule.type === 'minCredits' || 
-           rule.type === 'min_grade' || 
-           rule.type === 'credits_from_list' || 
-           rule.type === 'minCoursesFromList' ||
-           rule.type === 'minCoursesFromMultipleLists'
-          ) && (
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-            כרגע אין אפשרות לערוך פרמטרים נוספים עבור סוג כלל זה ({rule.type}).
-          </p>
-        )}
-
         <div className="flex justify-end gap-x-2 mt-6">
           <button
             type="button"

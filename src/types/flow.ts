@@ -18,20 +18,32 @@ export interface CourseNodeData {
 
 export interface RuleNodeData {
   id: string;
-  description: string;
-  currentProgress: string;
-  isSatisfied: boolean;
-  currentValue?: number | null;
-  requiredValue?: number | null;
-  // Optional details for multi-list rules
+  description: string; // For single rules or the title of a consolidated rule group
+  currentProgress: string; // Overall progress for single rules, or a summary for consolidated
+  isSatisfied: boolean; // Overall satisfaction for single rules, or if all consolidated are met
+  currentValue?: number | null; // Relevant for single rules with a singular progress metric
+  requiredValue?: number | null; // Relevant for single rules with a singular progress metric
+  
+  // Details for 'minCoursesFromMultipleLists' or similar complex single rules
   listProgressDetails?: { 
     listName: string; 
     currentValue: number; 
     requiredValue: number; 
     isSatisfied: boolean; 
   }[] | null;
-  onEditRule?: (id: string) => void;
-  onDeleteRule?: (id: string) => void;
+
+  // New field for consolidated rules
+  consolidatedRules?: Array<{
+    id: string; // ID of the original DegreeRule, for editing/deleting
+    description: string; // Description of the individual sub-rule
+    currentProgress: string; // Progress string of the sub-rule
+    isSatisfied: boolean; // Satisfaction status of the sub-rule
+    currentValue?: number | null; // Current value for this sub-rule's progress
+    requiredValue?: number | null; // Required value for this sub-rule
+  }> | null;
+
+  onEditRule?: (id: string) => void; // Retain for potential editing of the rule group or specific rules
+  onDeleteRule?: (id: string) => void; // Retain for potential deletion
   [key: string]: unknown;
 }
 

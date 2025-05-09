@@ -31,9 +31,9 @@
     "rules": [
       {
         "id": "total_credits_rule",
-        "description": "סה\"כ נקודות זכות להשלמה",
-        "type": "minCredits",
-        "min": 157.5 
+        "description": "סה\"כ נק\"ז לתואר",
+        "type": "total_credits",
+        "required_credits": 157.5
       },
       {
         "id": "selective_lists_rule",

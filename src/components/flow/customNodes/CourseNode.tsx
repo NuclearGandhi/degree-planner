@@ -37,32 +37,31 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
                   ${prerequisitesMet === false ? '!border-red-500 dark:!border-red-400 ring-1 ring-red-500 dark:ring-red-400' : ''}
                   flex flex-col justify-between`}
     >
-      {/* Top Section: Button, Title, Details, Warning */}
-      <div>
-        {/* Remove Button */}      
+      {/* Top Section: Original structure for course info and remove button */}
+      <div> 
         {data.onRemoveCourse && (
           <button 
-            onClick={handleRemoveClick}
-            onMouseDown={onInputMouseDown} // Prevent drag when clicking button
+            onClick={handleRemoveClick} 
+            onMouseDown={onInputMouseDown} 
             className="absolute top-1 left-1 p-0.5 rounded-full !text-gray-400 hover:!bg-red-100 hover:!text-red-600 dark:hover:!bg-red-700 dark:hover:!text-red-200 transition-colors"
             aria-label="הסר קורס"
+            title="הסר קורס"
           >
-            {/* Simple X icon */} 
+            {/* Original SVG Icon */}
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         )}
-
-        {/* Course Info */}
-        <div className="font-bold text-sm !text-gray-900 dark:!text-gray-100 mb-1 truncate">{data.label}</div>
+        <div className="font-bold text-sm !text-gray-900 dark:!text-gray-100 mb-1 truncate" title={data.label}>{data.label}</div>
         <div className="text-xs !text-gray-700 dark:!text-gray-300">מספר קורס: {data.courseId}</div>
-        <div className="text-xs !text-gray-700 dark:!text-gray-300">נקודות זכות: {data.credits}</div>
+        <div className="text-xs !text-gray-700 dark:!text-gray-300">נק"ז: {data.credits}</div>
 
-        {/* Prerequisite Warning */} 
         {prerequisitesMet === false && (
-          <div className="text-xs font-semibold !text-red-600 dark:!text-red-400 mt-1">
-            חסרים קדמים
+          <div className="absolute bottom-1 left-1 text-red-500 dark:text-red-400" title="אחד או יותר מהקריטריונים המקדימים אינם מתקיימים">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
           </div>
         )}
       </div>

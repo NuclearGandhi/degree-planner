@@ -47,7 +47,7 @@ export function evaluateRule(
         const currentCredits = coursesInPlan.reduce((sum, course) => sum + course.credits, 0);
         currentValue = currentCredits;
         requiredValue = rule.required_credits;
-        currentProgressString = `${currentValue}/${requiredValue} נ"ז`;
+        currentProgressString = `${currentValue}/${requiredValue} נק"ז`;
         isSatisfied = currentValue >= requiredValue;
       }
       break;
@@ -57,7 +57,7 @@ export function evaluateRule(
         const currentCredits = coursesInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
         currentValue = currentCredits;
         requiredValue = rule.min;
-        currentProgressString = `${currentValue}/${requiredValue} נ"ז`;
+        currentProgressString = `${currentValue}/${requiredValue} נק"ז`;
         isSatisfied = currentValue >= requiredValue;
       } else {
         currentProgressString = "כלל 'minCredits' לא הוגדר כראוי (חסר 'min')";
@@ -71,7 +71,7 @@ export function evaluateRule(
         const currentCreditsFromList = coursesFromListInPlan.reduce((sum, course) => sum + course.credits, 0);
         currentValue = currentCreditsFromList;
         requiredValue = rule.required_credits;
-        currentProgressString = `${currentValue}/${requiredValue} נ"ז מ${rule.course_list_name}`;
+        currentProgressString = `${currentValue}/${requiredValue} נק"ז מ${rule.course_list_name}`;
         isSatisfied = currentValue >= requiredValue;
       } else {
         currentProgressString = `רשימת קורסים "${rule.course_list_name}" לא נמצאה או שחסר required_credits.`;
@@ -140,7 +140,7 @@ export function evaluateRule(
         const mandatoryCoursesActuallyInPlan = coursesInPlan.filter(cp => mandatoryCourseIds.has(cp._id));
         currentValue = mandatoryCoursesActuallyInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
         requiredValue = rule.min;
-        currentProgressString = `${currentValue}/${requiredValue} נ"ז (חובה)`;
+        currentProgressString = `${currentValue}/${requiredValue} נק"ז (חובה)`;
         isSatisfied = currentValue >= requiredValue;
       } else {
         currentProgressString = "כלל 'minCreditsFromMandatory' לא הוגדר כראוי (חסר 'min' או הגדרת קורסי חובה ראשונית).";
@@ -159,7 +159,7 @@ export function evaluateRule(
         const selectiveCoursesInPlan = coursesInPlan.filter(cp => selectiveCourseIds.has(cp._id));
         currentValue = selectiveCoursesInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
         requiredValue = rule.min;
-        currentProgressString = `${currentValue}/${requiredValue} נ"ז (בחירה)`;
+        currentProgressString = `${currentValue}/${requiredValue} נק"ז (בחירה)`;
         isSatisfied = currentValue >= requiredValue;
       } else {
         currentProgressString = "כלל 'minCreditsFromAnySelectiveList' לא הוגדר כראוי.";
