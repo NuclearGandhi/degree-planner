@@ -2,40 +2,81 @@ import React, { useState, useEffect } from 'react';
 import { DegreeRule, RawCourseData } from '../../types/data';
 import BaseModal from './BaseModal';
 
+// For minCoursesFromMultipleLists items during editing
+interface EditableListItem {
+  id: string; // Temporary ID for React key
+  listName: string;
+  min: number;
+}
+
 interface RuleEditorModalProps {
   isOpen: boolean;
   rule: DegreeRule | null;
   onClose: () => void;
   onSave: (updatedRule: DegreeRule) => void;
   allCourses: RawCourseData[]; // For potential future use with course selection
+  availableCourseListNames: string[]; // New prop
 }
 
-const RuleEditorModal: React.FC<RuleEditorModalProps> = ({ isOpen, rule, onClose, onSave, allCourses }) => {
+const RuleEditorModal: React.FC<RuleEditorModalProps> = ({ 
+  isOpen, 
+  rule, 
+  onClose, 
+  onSave, 
+  allCourses, 
+  availableCourseListNames 
+}) => {
   const [description, setDescription] = useState('');
-  const [requiredCredits, setRequiredCredits] = useState<number | undefined>(undefined);
-  const [minGrade, setMinGrade] = useState<number | undefined>(undefined);
-  // TODO: Add state for other rule types (e.g., course lists for 'credits_from_list')
+  // State for 'total_credits' or 'minCredits'
+  const [generalRequiredCredits, setGeneralRequiredCredits] = useState<number | undefined>(undefined);
+  // State for 'min_grade'
+  const [minGradeValue, setMinGradeValue] = useState<number | undefined>(undefined);
+  // State for 'credits_from_list' or 'minCoursesFromList'
+  const [selectedCourseListName, setSelectedCourseListName] = useState<string>('');
+  const [listRuleNumericValue, setListRuleNumericValue] = useState<number | undefined>(undefined);
+  // State for 'minCoursesFromMultipleLists' items
+  const [multiListItems, setMultiListItems] = useState<EditableListItem[]>([]);
 
   useEffect(() => {
     if (rule) {
       setDescription(rule.description || '');
+      
+      // Reset all specific fields first
+      setGeneralRequiredCredits(undefined);
+      setMinGradeValue(undefined);
+      setSelectedCourseListName(availableCourseListNames.length > 0 ? availableCourseListNames[0] : '');
+      setListRuleNumericValue(undefined);
+      setMultiListItems([]); // Reset multi-list items
+
       if (rule.type === 'total_credits' || rule.type === 'minCredits') {
-        setRequiredCredits(rule.required_credits ?? rule.min ?? undefined);
-      } else {
-        setRequiredCredits(undefined);
+        setGeneralRequiredCredits(rule.required_credits ?? rule.min ?? undefined);
+      } else if (rule.type === 'min_grade') {
+        setMinGradeValue(rule.min_grade_value ?? undefined);
+      } else if (rule.type === 'credits_from_list') {
+        setSelectedCourseListName(rule.course_list_name || (availableCourseListNames.length > 0 ? availableCourseListNames[0] : ''));
+        setListRuleNumericValue(rule.required_credits ?? undefined);
+      } else if (rule.type === 'minCoursesFromList') {
+        setSelectedCourseListName(rule.course_list_name || (availableCourseListNames.length > 0 ? availableCourseListNames[0] : ''));
+        setListRuleNumericValue(rule.min ?? undefined);
+      } else if (rule.type === 'minCoursesFromMultipleLists') {
+        const initialMultiListItems = (rule.lists || []).map((item, index) => ({
+          ...item,
+          id: `item-${Date.now()}-${index}` // Ensure a unique ID for each item for stable keys
+        }));
+        setMultiListItems(initialMultiListItems);
       }
-      if (rule.type === 'min_grade') {
-        setMinGrade(rule.min_grade_value ?? undefined);
-      } else {
-        setMinGrade(undefined);
-      }
+      // TODO: Add handling for 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList' if they have distinct editable params
+
     } else {
-      // Reset fields when rule is null (modal closed or new rule)
+      // Reset all fields if rule is null
       setDescription('');
-      setRequiredCredits(undefined);
-      setMinGrade(undefined);
+      setGeneralRequiredCredits(undefined);
+      setMinGradeValue(undefined);
+      setSelectedCourseListName(availableCourseListNames.length > 0 ? availableCourseListNames[0] : '');
+      setListRuleNumericValue(undefined);
+      setMultiListItems([]);
     }
-  }, [rule]);
+  }, [rule, availableCourseListNames]);
 
   if (!rule) {
     if (isOpen) console.warn("RuleEditorModal: rule is null while modal is open.");
@@ -47,20 +88,57 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({ isOpen, rule, onClose
     if (!rule) return;
 
     const updatedRule: DegreeRule = {
-      ...rule,
+      ...rule, // Preserve other rule properties like id, type
       description,
     };
 
-    if (rule.type === 'total_credits' || rule.type === 'minCredits') {
-      updatedRule.required_credits = requiredCredits; // Or handle 'min' based on original structure
-      if (rule.type === 'minCredits') updatedRule.min = requiredCredits;
-    }
+    // Clear potentially irrelevant fields before setting new ones based on type
+    delete updatedRule.required_credits;
+    delete updatedRule.min;
+    delete updatedRule.min_grade_value;
+    delete updatedRule.course_list_name;
+    delete updatedRule.lists; // Clear lists before potentially re-adding
 
-    if (rule.type === 'min_grade') {
-      updatedRule.min_grade_value = minGrade;
+    if (rule.type === 'total_credits') {
+      updatedRule.required_credits = generalRequiredCredits;
+    } else if (rule.type === 'minCredits') {
+      updatedRule.min = generalRequiredCredits;
+    } else if (rule.type === 'min_grade') {
+      updatedRule.min_grade_value = minGradeValue;
+    } else if (rule.type === 'credits_from_list') {
+      updatedRule.course_list_name = selectedCourseListName;
+      updatedRule.required_credits = listRuleNumericValue;
+    } else if (rule.type === 'minCoursesFromList') {
+      updatedRule.course_list_name = selectedCourseListName;
+      updatedRule.min = listRuleNumericValue;
+    } else if (rule.type === 'minCoursesFromMultipleLists') {
+      // Convert EditableListItem back to the format expected by DegreeRule, removing temporary id
+      updatedRule.lists = multiListItems.map(({ id, ...rest }) => rest);
     }
+    // TODO: Add saving logic for other rule types
 
     onSave(updatedRule);
+  };
+  
+  const commonInputClass = "mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900 dark:text-slate-50";
+
+  // Handlers for multiListItems
+  const handleAddMultiListItem = () => {
+    setMultiListItems(prev => [...prev, {
+      id: `new-item-${Date.now()}`,
+      listName: availableCourseListNames.length > 0 ? availableCourseListNames[0] : '',
+      min: 1
+    }]);
+  };
+
+  const handleMultiListItemChange = (id: string, field: 'listName' | 'min', value: string | number) => {
+    setMultiListItems(prev => prev.map(item => 
+      item.id === id ? { ...item, [field]: field === 'min' ? (Number(value) || 0) : value } : item
+    ));
+  };
+
+  const handleRemoveMultiListItem = (id: string) => {
+    setMultiListItems(prev => prev.filter(item => item.id !== id));
   };
 
   return (
@@ -68,7 +146,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({ isOpen, rule, onClose
       isOpen={isOpen} 
       onClose={onClose} 
       title="עריכת כלל" 
-      maxWidth="max-w-md"
+      maxWidth="max-w-lg"
     >
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
@@ -78,22 +156,22 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({ isOpen, rule, onClose
             id="ruleDescription"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900 dark:text-slate-50"
+            className={commonInputClass}
             required
           />
         </div>
 
         {(rule.type === 'total_credits' || rule.type === 'minCredits') && (
           <div className="mb-4">
-            <label htmlFor="requiredCredits" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label htmlFor="generalRequiredCredits" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               {rule.type === 'minCredits' ? 'מינימום נ"ז' : 'סה"כ נ"ז נדרשות'}
             </label>
             <input
               type="number"
-              id="requiredCredits"
-              value={requiredCredits ?? ''}
-              onChange={(e) => setRequiredCredits(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900 dark:text-slate-50"
+              id="generalRequiredCredits"
+              value={generalRequiredCredits ?? ''}
+              onChange={(e) => setGeneralRequiredCredits(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+              className={commonInputClass}
               min="0"
             />
           </div>
@@ -101,21 +179,126 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({ isOpen, rule, onClose
 
         {rule.type === 'min_grade' && (
           <div className="mb-4">
-            <label htmlFor="minGrade" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">ציון מינימלי</label>
+            <label htmlFor="minGradeValue" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">ציון מינימלי</label>
             <input
               type="number"
-              id="minGrade"
-              value={minGrade ?? ''}
-              onChange={(e) => setMinGrade(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900 dark:text-slate-50"
+              id="minGradeValue"
+              value={minGradeValue ?? ''}
+              onChange={(e) => setMinGradeValue(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+              className={commonInputClass}
               min="0"
               max="100"
             />
           </div>
         )}
+
+        {(rule.type === 'credits_from_list' || rule.type === 'minCoursesFromList') && (
+          <>
+            <div className="mb-4">
+              <label htmlFor="courseListName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">שם רשימת קורסים</label>
+              <select
+                id="courseListName"
+                value={selectedCourseListName}
+                onChange={(e) => setSelectedCourseListName(e.target.value)}
+                className={commonInputClass}
+                disabled={availableCourseListNames.length === 0}
+              >
+                {availableCourseListNames.length === 0 && <option value="">אין רשימות זמינות</option>}
+                {availableCourseListNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="listRuleNumericValue" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                {rule.type === 'credits_from_list' ? 'נ"ז נדרשות מהרשימה' : 'מספר קורסים נדרש מהרשימה'}
+              </label>
+              <input
+                type="number"
+                id="listRuleNumericValue"
+                value={listRuleNumericValue ?? ''}
+                onChange={(e) => setListRuleNumericValue(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                className={commonInputClass}
+                min="0"
+              />
+            </div>
+          </>
+        )}
+
+        {/* minCoursesFromMultipleLists */}
+        {rule.type === 'minCoursesFromMultipleLists' && (
+          <div className="mb-4 space-y-3">
+            <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 mb-2">דרישות מרשימות מרובות:</h4>
+            {multiListItems.map((item) => {
+              // Get list names already selected by OTHER items in this rule
+              const otherSelectedListNames = multiListItems
+                .filter(otherItem => otherItem.id !== item.id)
+                .map(otherItem => otherItem.listName);
+
+              // Filter available list names for THIS item's dropdown
+              const listNamesForThisDropdown = availableCourseListNames.filter(name => 
+                name === item.listName || !otherSelectedListNames.includes(name)
+              );
+
+              return (
+                <div key={item.id} className="flex items-center space-x-2 space-x-reverse p-2 border border-slate-200 dark:border-slate-700 rounded-md">
+                  <div className="flex-grow">
+                    <label htmlFor={`multiListSelect-${item.id}`} className="sr-only">רשימה</label>
+                    <select 
+                      id={`multiListSelect-${item.id}`}
+                      value={item.listName}
+                      onChange={(e) => handleMultiListItemChange(item.id, 'listName', e.target.value)}
+                      className={`${commonInputClass} mb-1`}
+                      disabled={listNamesForThisDropdown.length === 0 && !item.listName}
+                    >
+                      {listNamesForThisDropdown.length === 0 && !item.listName && <option value="">אין רשימות פנויות</option>}
+                      {listNamesForThisDropdown.map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                    <label htmlFor={`multiListMin-${item.id}`} className="sr-only">מינימום</label>
+                    <input 
+                      type="number" 
+                      id={`multiListMin-${item.id}`}
+                      value={item.min}
+                      onChange={(e) => handleMultiListItemChange(item.id, 'min', e.target.value)}
+                      className={commonInputClass}
+                      min="0"
+                      placeholder="מינימום קורסים"
+                    />
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => handleRemoveMultiListItem(item.id)}
+                    className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    aria-label="הסר דרישת רשימה"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+            <button 
+              type="button" 
+              onClick={handleAddMultiListItem}
+              className="mt-2 px-3 py-1.5 text-sm text-indigo-700 dark:text-indigo-300 border border-indigo-500 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
+              disabled={multiListItems.length >= availableCourseListNames.length}
+            >
+              הוסף דרישת רשימה +
+            </button>
+          </div>
+        )}
         
-        {/* Placeholder for other rule types */}
-        {!(rule.type === 'total_credits' || rule.type === 'minCredits' || rule.type === 'min_grade') && (
+        {/* Fallback for types not yet specifically handled for editing parameters */}
+        {!(rule.type === 'total_credits' || 
+           rule.type === 'minCredits' || 
+           rule.type === 'min_grade' || 
+           rule.type === 'credits_from_list' || 
+           rule.type === 'minCoursesFromList' ||
+           rule.type === 'minCoursesFromMultipleLists'
+          ) && (
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
             כרגע אין אפשרות לערוך פרמטרים נוספים עבור סוג כלל זה ({rule.type}).
           </p>
@@ -143,9 +326,9 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({ isOpen, rule, onClose
 
 export default RuleEditorModal;
 
+/*
 // We need RawCourseData for future course selection features within the modal
 // For now, it's passed as a prop but not actively used in this initial version.
-/*
 export interface RawCourseData {
   _id: string;
   name: string;

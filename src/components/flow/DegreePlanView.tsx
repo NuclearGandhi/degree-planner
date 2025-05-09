@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -25,13 +25,15 @@ import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, Prerequisi
 import { AppNode, AppEdge } from '../../types/flow';
 import { evaluateRule } from '../../utils/ruleEvaluator';
 import { AveragesDisplay } from '../../components/ui/AveragesDisplay';
-import { PlanManagement } from '../../components/ui/PlanManagement';
-import { savePlanToSlot, loadPlanFromSlot, getActivePlanId } from '../../utils/planStorage';
+import { savePlan, loadPlan } from '../../utils/planStorage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { numberToHebrewLetter } from '../../utils/hebrewUtils';
 import { checkPrerequisites } from '../../utils/prerequisiteChecker';
 import { CourseDetailModal } from '../../components/ui/CourseDetailModal';
 import RuleEditorModal from '../../components/ui/RuleEditorModal';
+import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
+import { Logo } from '../../components/ui/Logo';
+import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
 
 const nodeTypes = {
   course: CourseNode,
@@ -50,6 +52,9 @@ const SEMESTER_TOP_MARGIN = 100; // Further increased space below rules / above 
 const ADD_SEMESTER_NODE_ID = 'add-new-semester-button';
 const MAX_SEMESTERS = 16;
 const SEMESTER_TITLE_HEIGHT = 40; // Approximate height for the title node + spacing
+const MANDATORY_COURSES_LIST_KEY = "רשימת קורסי חובה";
+
+type SaveStatus = 'idle' | 'saving' | 'saved'; // New type for save status
 
 const transformDataToNodes = (
   template: DegreeTemplate | undefined,
@@ -322,7 +327,6 @@ function DegreePlanView() {
   // State for loaded data
   const [allCourses, setAllCourses] = useState<RawCourseData[]>([]);
   const [currentTemplate, setCurrentTemplate] = useState<DegreeTemplate | undefined>(undefined);
-  const [initialMandatoryCourseIdsFromTemplateDefinition, setInitialMandatoryCourseIdsFromTemplateDefinition] = useState<string[] | undefined>(undefined); // NEW STATE
   const [grades, setGrades] = useState<Record<string, string>>({});
 
   // State for course selection modal
@@ -337,7 +341,12 @@ function DegreePlanView() {
   const [isRuleEditorModalOpen, setIsRuleEditorModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<DegreeRule | null>(null);
 
+  // State for Course List Editor Modal
+  const [isCourseListEditorModalOpen, setIsCourseListEditorModalOpen] = useState(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(true); // Loading state
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const autosaveTimeoutRef = useRef<number | null>(null);
 
   const handleAddCourseToSemesterCallback = useCallback((semesterNumber: number) => {
     console.log(`DegreePlanView: Request to add course to semester: ${semesterNumber}`);
@@ -472,7 +481,6 @@ function DegreePlanView() {
   }, [setCurrentTemplate, handleCloseRuleEditor]);
 
   const handleDeleteRule = useCallback((ruleId: string) => {
-    // Consider adding a window.confirm here for user confirmation
     if (window.confirm("האם אתה בטוח שברצונך למחוק כלל זה?")) {
       setCurrentTemplate(prevTemplate => {
         if (!prevTemplate || !prevTemplate.rules) return prevTemplate;
@@ -482,34 +490,39 @@ function DegreePlanView() {
     }
   }, [setCurrentTemplate]);
 
-  // Save/Load Callbacks
-  const handleSavePlan = useCallback((slotId: number) => {
-    if (currentTemplate) {
-      savePlanToSlot(slotId, currentTemplate, grades);
-      alert(`Plan saved to Slot ${slotId}`); // Simple feedback
-    } else {
-      alert("No plan data to save.");
-    }
-  }, [currentTemplate, grades]);
-
-  const handleLoadPlan = useCallback((slotId: number) => {
-    const loadedPlan = loadPlanFromSlot(slotId);
-    if (loadedPlan) {
-      setCurrentTemplate(loadedPlan.template);
-      // Populate initial mandatory course IDs from the loaded template's semesters
-      if (loadedPlan.template && typeof loadedPlan.template.semesters === 'object' && loadedPlan.template.semesters !== null) {
-        setInitialMandatoryCourseIdsFromTemplateDefinition(Object.values(loadedPlan.template.semesters).flat());
-      } else {
-        setInitialMandatoryCourseIdsFromTemplateDefinition(undefined);
-      }
-      setGrades(loadedPlan.grades);
-      alert(`Plan loaded from Slot ${slotId}`);
-    } else {
-      alert(`No plan found in Slot ${slotId}.`);
-    }
+  // Callback for Course List Editor Modal
+  const handleToggleCourseListEditorModal = useCallback(() => {
+    setIsCourseListEditorModalOpen(prev => !prev);
   }, []);
 
-  // Initial Load Effect (tries to load active plan or default)
+  // Callback for saving updated course lists
+  const handleSaveCourseLists = useCallback((updatedLists: Record<string, string[]>) => {
+    const listNameBeingSaved = Object.keys(updatedLists)[0]; // Assuming only one list is saved at a time by the modal for now
+    const newCourseIdsForList = updatedLists[listNameBeingSaved];
+
+    setCurrentTemplate(prevTemplate => {
+      if (!prevTemplate) return undefined;
+
+      if (listNameBeingSaved === MANDATORY_COURSES_LIST_KEY) {
+        // Update the separate list of defined mandatory courses
+        return { ...prevTemplate, definedMandatoryCourseIds: newCourseIdsForList };
+      } else {
+        // Update the regular "courses-lists"
+        const newCoursesLists = { ...(prevTemplate["courses-lists"] || {}) };
+        if (newCourseIdsForList.length > 0) {
+          newCoursesLists[listNameBeingSaved] = newCourseIdsForList;
+        } else {
+          delete newCoursesLists[listNameBeingSaved]; // Remove list if empty
+        }
+        return { ...prevTemplate, ["courses-lists"]: newCoursesLists };
+      }
+    });
+    // Add feedback? e.g., alert('Course lists updated!')
+    // Close the modal after saving
+    setIsCourseListEditorModalOpen(false);
+  }, [setCurrentTemplate, setIsCourseListEditorModalOpen]);
+
+  // Initial Load Effect
   useEffect(() => {
     const loadInitialData = async () => {
       console.log("[DegreePlanView] Initial Load: Starting...");
@@ -518,50 +531,97 @@ function DegreePlanView() {
       console.log("[DegreePlanView] Initial Load: Fetched allCourses:", courses);
       setAllCourses(courses);
       
-      const activeId = getActivePlanId();
-      let loadedSuccessfully = false;
-      let templateForInitialMandatoryIds: DegreeTemplate | undefined = undefined;
+      let templateForProcessing: DegreeTemplate | undefined = undefined;
+      let gradesToSet: Record<string, string> = {};
 
-      if (activeId !== null) {
-        console.log(`[DegreePlanView] Initial Load: Attempting to load active plan from slot: ${activeId}`);
-        const loadedPlan = loadPlanFromSlot(activeId);
-        console.log("[DegreePlanView] Initial Load: Loaded plan from storage:", loadedPlan);
-        if (loadedPlan) {
-          setCurrentTemplate(loadedPlan.template);
-          setGrades(loadedPlan.grades);
-          templateForInitialMandatoryIds = loadedPlan.template;
-          loadedSuccessfully = true;
-          console.log("[DegreePlanView] Initial Load: Successfully loaded plan from slot. currentTemplate:", loadedPlan.template);
-        }
-      }
-      if (!loadedSuccessfully) {
-        console.log("[DegreePlanView] Initial Load: No active plan loaded or load failed, fetching default template.");
+      console.log("[DegreePlanView] Initial Load: Attempting to load autosaved plan.");
+      const loadedAutosavedPlan = loadPlan(); // Use new loadPlan
+      console.log("[DegreePlanView] Initial Load: Loaded autosaved plan from storage:", loadedAutosavedPlan);
+
+      if (loadedAutosavedPlan) {
+        templateForProcessing = loadedAutosavedPlan.template;
+        gradesToSet = loadedAutosavedPlan.grades;
+        console.log("[DegreePlanView] Initial Load: Successfully loaded autosaved plan. Template for processing:", templateForProcessing);
+      } else {
+        console.log("[DegreePlanView] Initial Load: No autosaved plan found, fetching default template.");
         const degreeData = await fetchDegreeTemplates();
         console.log("[DegreePlanView] Initial Load: Fetched degree templates data:", degreeData);
         const firstTemplateId = Object.keys(degreeData)[0];
         console.log("[DegreePlanView] Initial Load: First template ID:", firstTemplateId);
         if (firstTemplateId && degreeData[firstTemplateId]) {
-          setCurrentTemplate(degreeData[firstTemplateId]);
-          templateForInitialMandatoryIds = degreeData[firstTemplateId];
-          console.log("[DegreePlanView] Initial Load: Set currentTemplate to default:", degreeData[firstTemplateId]);
+          templateForProcessing = degreeData[firstTemplateId];
+          console.log("[DegreePlanView] Initial Load: Set template for processing to default:", templateForProcessing);
         } else {
           console.warn("[DegreePlanView] Initial Load: No default template found or degreeData is empty.");
         }
-        setGrades({});
+        // gradesToSet remains {} for a new default template
       }
 
-      // Set initial mandatory course IDs based on the loaded/default template
-      if (templateForInitialMandatoryIds && typeof templateForInitialMandatoryIds.semesters === 'object' && templateForInitialMandatoryIds.semesters !== null) {
-        setInitialMandatoryCourseIdsFromTemplateDefinition(Object.values(templateForInitialMandatoryIds.semesters).flat());
-      } else {
-        setInitialMandatoryCourseIdsFromTemplateDefinition(undefined);
+      // Ensure definedMandatoryCourseIds is populated if it wasn't in the loaded/defaulted template
+      if (templateForProcessing && !templateForProcessing.definedMandatoryCourseIds && typeof templateForProcessing.semesters === 'object' && templateForProcessing.semesters !== null) {
+        const allMandatoryIdsFromSemesters = [...new Set(Object.values(templateForProcessing.semesters).flat())];
+        templateForProcessing = { ...templateForProcessing, definedMandatoryCourseIds: allMandatoryIdsFromSemesters };
+        console.log("[DegreePlanView] Initial Load: Populated definedMandatoryCourseIds from semesters:", templateForProcessing.definedMandatoryCourseIds);
       }
+      
+      setCurrentTemplate(templateForProcessing);
+      setGrades(gradesToSet);
+      console.log("[DegreePlanView] Initial Load: Final currentTemplate set:", templateForProcessing, "Grades set:", gradesToSet);
 
       setIsLoading(false);
       console.log("[DegreePlanView] Initial Load: Finished. isLoading: false");
     };
     loadInitialData();
   }, []);
+
+  // Autosave Effect
+  useEffect(() => {
+    if (isLoading || !currentTemplate) {
+      // If loading or no template, and we were in the process of saving (status was 'saving'),
+      // reset to 'idle'. If it was already 'saved', let it persist.
+      if (saveStatus === 'saving') {
+        setSaveStatus('idle');
+      }
+      // Also, ensure any pending save operation is cancelled if loading starts.
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null; // Clear the ref
+      }
+      return;
+    }
+
+    // If we reach here, isLoading is false and currentTemplate exists.
+
+    // Clear any existing timeout to debounce
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    setSaveStatus('saving');
+    console.log("[DegreePlanView] Autosave: Change detected. Status: saving. Debouncing save...");
+
+    autosaveTimeoutRef.current = window.setTimeout(() => {
+      console.log("[DegreePlanView] Autosave: Debounce timeout reached. Saving plan...");
+      // Re-check currentTemplate inside timeout, as it's part of the closure
+      if (currentTemplate) { 
+        savePlan(currentTemplate, grades);
+        setSaveStatus('saved'); 
+        console.log("[DegreePlanView] Autosave: Plan saved. Status: saved.");
+      } else {
+        // This case should ideally not be hit if the initial guard is effective
+        setSaveStatus('idle');
+        console.warn("[DegreePlanView] Autosave: currentTemplate was null during save attempt. Aborted.");
+      }
+      autosaveTimeoutRef.current = null; // Clear the ref after execution
+    }, 1500);
+
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null; // Ensure ref is cleared on cleanup
+      }
+    };
+  }, [currentTemplate, grades, isLoading]); // Removed saveStatus from dependencies
 
   // New useEffect for styling edges based on selection
   useEffect(() => {
@@ -605,7 +665,7 @@ function DegreePlanView() {
   // useEffect to update nodes/edges when data changes (MAIN EFFECT)
   useEffect(() => {
     console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. Dependencies changed.");
-    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", currentTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array', "initialMandatoryCourseIds:", initialMandatoryCourseIdsFromTemplateDefinition);
+    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", currentTemplate, "allCourses count:", Array.isArray(allCourses) ? allCourses.length : 'not an array');
     
     if (isLoading || !currentTemplate || !Array.isArray(allCourses) || allCourses.length === 0) {
       console.log("[DegreePlanView] Node/Edge Update Effect: Guarded. Not generating nodes/edges yet.");
@@ -631,7 +691,7 @@ function DegreePlanView() {
       handleAddSemesterCallback,
       handleGradeChangeCallback,
       handleRemoveCourseCallback,
-      initialMandatoryCourseIdsFromTemplateDefinition,
+      currentTemplate?.definedMandatoryCourseIds,
       handleCourseNodeDoubleClick,
       handleOpenRuleEditor,
       handleDeleteRule
@@ -641,7 +701,7 @@ function DegreePlanView() {
     // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
     setEdges(newEdges); // This sets the base edges
-  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, initialMandatoryCourseIdsFromTemplateDefinition, handleCourseNodeDoubleClick, handleOpenRuleEditor, handleDeleteRule]);
+  }, [currentTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, handleCourseNodeDoubleClick, handleOpenRuleEditor, handleDeleteRule]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);
@@ -666,6 +726,12 @@ function DegreePlanView() {
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
+      <div className="fixed top-4 left-4 z-50 flex items-center">
+        {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded mr-3">שומר...</span>}
+        {saveStatus === 'saved' && <span className="text-xs text-green-600 dark:text-green-400 p-1 bg-green-100 dark:bg-green-800 rounded mr-3">נשמר ✓</span>}
+        <Logo />
+      </div>
+      <ThemeToggleButton />
       <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}
@@ -706,16 +772,44 @@ function DegreePlanView() {
         onClose={handleCloseRuleEditor}
         onSave={handleSaveRule}
         allCourses={allCourses}
+        availableCourseListNames={currentTemplate && currentTemplate["courses-lists"] ? Object.keys(currentTemplate["courses-lists"]) : []}
+      />
+      <CourseListEditorModal
+        isOpen={isCourseListEditorModalOpen}
+        onClose={handleToggleCourseListEditorModal}
+        allCourses={allCourses}
+        currentCourseLists={useMemo(() => {
+          const lists = { ...(currentTemplate?.["courses-lists"] || {}) };
+          // Add the definedMandatoryCourseIds as a special list for the editor
+          if (currentTemplate && currentTemplate.definedMandatoryCourseIds) {
+            lists[MANDATORY_COURSES_LIST_KEY] = [...new Set(currentTemplate.definedMandatoryCourseIds)];
+          } else if (currentTemplate && typeof currentTemplate.semesters === 'object' && currentTemplate.semesters !== null) {
+            // Fallback for older data or if definedMandatoryCourseIds is somehow not set yet:
+            // show current semester courses, but saving will create/update definedMandatoryCourseIds
+            // This also ensures the list is shown even if definedMandatoryCourseIds is empty initially
+             const allMandatoryIdsFromSemesters = [...new Set(Object.values(currentTemplate.semesters).flat())];
+             lists[MANDATORY_COURSES_LIST_KEY] = allMandatoryIdsFromSemesters;
+          } else {
+            lists[MANDATORY_COURSES_LIST_KEY] = []; // Ensure the key exists for the modal
+          }
+          return lists;
+        }, [currentTemplate])}
+        onSaveCourseLists={handleSaveCourseLists}
+        mandatoryCoursesListKey={MANDATORY_COURSES_LIST_KEY}
       />
       <AveragesDisplay
         currentTemplate={currentTemplate}
         allCourses={allCourses}
         grades={grades}
       />
-      <PlanManagement
-        onSavePlan={handleSavePlan}
-        onLoadPlan={handleLoadPlan}
-      />
+      <div className="absolute top-16 right-4 z-10 flex flex-col space-y-2">
+        <button 
+          onClick={handleToggleCourseListEditorModal}
+          className="p-2 bg-blue-500 text-white rounded shadow-lg hover:bg-blue-600 transition-colors text-sm"
+        >
+          ערוך רשימות קורסים
+        </button>
+      </div>
     </div>
   );
 }

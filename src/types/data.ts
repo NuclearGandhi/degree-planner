@@ -61,7 +61,8 @@ export interface DegreeTemplate {
   // and values are arrays of course IDs (string[])
   semesters: Record<string, string[]>; 
   rules?: DegreeRule[]; 
-  "courses-lists"?: Record<string, string[] | number[]>;
+  "courses-lists"?: Record<string, string[]>;
+  definedMandatoryCourseIds?: string[]; // New field for the independent list of mandatory courses
 }
 
 export interface DegreesFileStructure {

@@ -20,7 +20,7 @@ export const ThemeToggleButton: React.FC = () => {
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 rounded-full bg-slate-200 bg-opacity-70 dark:bg-slate-700 dark:bg-opacity-70 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 fixed top-4 left-4 z-50 transition-colors duration-150 shadow-md"
+      className="p-2 rounded-full bg-slate-200 bg-opacity-70 dark:bg-slate-700 dark:bg-opacity-70 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 fixed top-4 right-4 z-50 transition-colors duration-150 shadow-md"
       aria-label={theme === 'dark' ? 'עבור למצב בהיר' : 'עבור למצב כהה'}
     >
       {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
