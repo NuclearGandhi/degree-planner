@@ -124,10 +124,19 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
 
   // Handlers for multiListItems
   const handleAddMultiListItem = () => {
+    // Determine list names already used in the current rule's multiListItems state
+    const currentlyUsedListNamesInRule = new Set(multiListItems.map(item => item.listName));
+    
+    // Filter the globally available list names to find those not yet used in this specific rule
+    const trulyAvailableListNamesForNewItem = availableCourseListNames.filter(
+      name => !currentlyUsedListNamesInRule.has(name)
+    );
+
     setMultiListItems(prev => [...prev, {
       id: `new-item-${Date.now()}`,
-      listName: availableCourseListNames.length > 0 ? availableCourseListNames[0] : '',
-      min: 1
+      // Default to the first truly available list for this new item, or empty if none are left
+      listName: trulyAvailableListNamesForNewItem.length > 0 ? trulyAvailableListNamesForNewItem[0] : '', 
+      min: 1 // Default min value
     }]);
   };
 

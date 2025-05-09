@@ -7,7 +7,8 @@ interface CourseSelectionModalProps {
   onClose: () => void;
   courses: RawCourseData[]; // All available courses to list
   onSelectCourse: (course: RawCourseData) => void;
-  semesterNumber: number | null; // To know which semester we are adding to
+  semesterNumber?: number | null; // Made optional
+  customTitle?: string; // New optional prop for custom title
 }
 
 export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
@@ -16,6 +17,7 @@ export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
   courses,
   onSelectCourse,
   semesterNumber,
+  customTitle, // New prop
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -29,12 +31,11 @@ export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
     );
   }, [courses, searchTerm]);
 
-  if (semesterNumber === null) {
-    if (isOpen) console.warn("CourseSelectionModal: semesterNumber is null while modal is open.");
-    return null;
-  }
-
-  const modalTitle = `בחר קורס לסמסטר ${semesterNumber}`;
+  const modalTitle = customTitle 
+    ? customTitle 
+    : semesterNumber 
+      ? `בחר קורס לסמסטר ${semesterNumber}` 
+      : "בחר קורס";
 
   return (
     <BaseModal 

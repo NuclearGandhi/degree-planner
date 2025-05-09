@@ -496,30 +496,34 @@ function DegreePlanView() {
   }, []);
 
   // Callback for saving updated course lists
-  const handleSaveCourseLists = useCallback((updatedLists: Record<string, string[]>) => {
-    const listNameBeingSaved = Object.keys(updatedLists)[0]; // Assuming only one list is saved at a time by the modal for now
-    const newCourseIdsForList = updatedLists[listNameBeingSaved];
-
+  const handleSaveCourseLists = useCallback((allListsFromModal: Record<string, string[]>) => {
     setCurrentTemplate(prevTemplate => {
       if (!prevTemplate) return undefined;
 
-      if (listNameBeingSaved === MANDATORY_COURSES_LIST_KEY) {
-        // Update the separate list of defined mandatory courses
-        return { ...prevTemplate, definedMandatoryCourseIds: newCourseIdsForList };
-      } else {
-        // Update the regular "courses-lists"
-        const newCoursesLists = { ...(prevTemplate["courses-lists"] || {}) };
-        if (newCourseIdsForList.length > 0) {
-          newCoursesLists[listNameBeingSaved] = newCourseIdsForList;
-        } else {
-          delete newCoursesLists[listNameBeingSaved]; // Remove list if empty
+      // Handle the mandatory courses list
+      const newDefinedMandatoryCourseIds = allListsFromModal[MANDATORY_COURSES_LIST_KEY] !== undefined
+        ? allListsFromModal[MANDATORY_COURSES_LIST_KEY]
+        : prevTemplate.definedMandatoryCourseIds; // Fallback if key somehow missing
+
+      // Rebuild the custom courses-lists object from what's in the modal
+      const newCustomCoursesLists: Record<string, string[]> = {};
+      for (const listName in allListsFromModal) {
+        if (listName !== MANDATORY_COURSES_LIST_KEY) {
+          // Only add non-empty lists to the final custom lists
+          if (allListsFromModal[listName] && allListsFromModal[listName].length > 0) {
+            newCustomCoursesLists[listName] = allListsFromModal[listName];
+          }
+          // If a list was emptied in the modal, it won't be added here, effectively deleting it from "courses-lists".
         }
-        return { ...prevTemplate, ["courses-lists"]: newCoursesLists };
       }
+
+      return {
+        ...prevTemplate,
+        definedMandatoryCourseIds: newDefinedMandatoryCourseIds,
+        "courses-lists": newCustomCoursesLists,
+      };
     });
-    // Add feedback? e.g., alert('Course lists updated!')
-    // Close the modal after saving
-    setIsCourseListEditorModalOpen(false);
+    setIsCourseListEditorModalOpen(false); // Explicitly close modal here
   }, [setCurrentTemplate, setIsCourseListEditorModalOpen]);
 
   // Initial Load Effect
