@@ -835,12 +835,26 @@ function DegreePlanView() {
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      <div className="fixed top-4 left-4 z-50 flex items-center">
-        {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded mr-3">שומר...</span>}
-        {saveStatus === 'saved' && <span className="text-xs text-green-600 dark:text-green-400 p-1 bg-green-100 dark:bg-green-800 rounded mr-3">נשמר ✓</span>}
+      <div className="fixed top-4 left-4 z-50 flex flex-row-reverse items-center gap-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
+        {/* Leftmost: Logo (no shadow) */}
         <Logo />
+        {/* Theme Toggle */}
+        <ThemeToggleButton />
+        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
+        {/* Save Status */}
+        <div className="flex items-center gap-2">
+          {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}
+          {saveStatus === 'saved' && <span className="text-xs text-green-600 dark:text-green-400 p-1 bg-green-100 dark:bg-green-800 rounded">נשמר ✓</span>}
+        </div>
+        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
+        {/* Rightmost: Edit Course List Button */}
+        <button 
+          onClick={handleToggleCourseListEditorModal}
+          className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+        >
+          ערוך רשימות קורסים
+        </button>
       </div>
-      <ThemeToggleButton />
       <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}
@@ -920,14 +934,6 @@ function DegreePlanView() {
         allCourses={allCourses}
         grades={grades}
       />
-      <div className="absolute top-16 right-4 z-10 flex flex-col space-y-2">
-        <button 
-          onClick={handleToggleCourseListEditorModal}
-          className="p-2 bg-blue-500 text-white rounded shadow-lg hover:bg-blue-600 transition-colors text-sm"
-        >
-          ערוך רשימות קורסים
-        </button>
-      </div>
     </div>
   );
 }
