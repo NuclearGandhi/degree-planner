@@ -1,0 +1,193 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Degree Planner Project Rules
+
+## Project Overview
+The Degree Planner is a React-based web application that helps students plan their academic degree path. It provides a visual interface for managing courses, tracking progress, and ensuring degree requirements are met.
+
+## Development Environment
+
+### 1. Logging Guidelines
+- Use `console.debug()` for development-only logs
+- Use `console.warn()` for important warnings that should show in production
+- Use `console.error()` for critical errors
+- Example:
+  ```typescript
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[checkPrerequisites] Checking prerequisites for', courseId);
+  }
+  console.warn('[checkPrerequisites] Prerequisite violation:', courseId);
+  ```
+
+### 2. Environment Configuration
+- Development: Full logging enabled
+- Production (GitHub Pages): Only warnings and errors
+- Use Vite's environment variables:
+  ```typescript
+  if (import.meta.env.DEV) {
+    // Development-only code
+  }
+  ```
+
+## Data Structure
+
+### 1. Course Data
+- Source: `public/data/merged_courses.json`
+- Each course contains:
+  - `_id`: Unique identifier
+  - `name`: Course name
+  - `credits`: Number of credits
+  - `prereqTree`: Prerequisite structure (supports both `{and: [...]}` and `{or: [...]}` formats)
+  - Additional metadata (instructor, schedule, etc.)
+
+### 2. Degree Templates
+- Source: `public/data/degrees.json`
+- Structure:
+  ```typescript
+  interface DegreeTemplate {
+    id: string;
+    name: string;
+    total_credits: number;
+    semesters: Record<string, string[]>; // semester name -> course IDs
+    rules?: DegreeRule[];
+    "courses-lists"?: Record<string, string[]>;
+    definedMandatoryCourseIds?: string[];
+  }
+  ```
+
+### 3. Degree Rules
+Supported rule types:
+- `total_credits`: Total credits required for degree
+- `credits_from_list`: Credits required from specific course list
+- `min_grade`: Minimum grade requirements
+- `minCredits`: Minimum credits requirement
+- `minCoursesFromList`: Minimum courses from a list
+- `minCoursesFromMultipleLists`: Complex rule for multiple course lists
+- `minCreditsFromMandatory`: Credits from mandatory courses
+- `minCreditsFromAnySelectiveList`: Credits from selective courses
+
+## UI Components
+
+### 1. Main View (`DegreePlanView.tsx`)
+- Visual flow-based interface using ReactFlow
+- Semester-based course organization
+- Rule evaluation and progress tracking
+- Course selection and management
+
+### 2. Course Nodes
+- Display course information
+- Grade input
+- Prerequisite validation
+- Course removal
+
+### 3. Rule Nodes
+- Progress tracking
+- Rule satisfaction status
+- Consolidated rules view
+- Rule editing capabilities
+
+## Key Features
+
+### 1. Course Management
+- Add/remove courses to semesters
+- Grade input and tracking
+- Prerequisite validation
+- Course details view
+
+### 2. Rule Evaluation
+- Real-time rule satisfaction checking
+- Progress tracking
+- Multiple rule type support
+- Consolidated rules view
+
+### 3. Data Persistence
+- Local storage for degree plans
+- Course data caching
+- Template management
+
+## Development Guidelines
+
+### 1. Code Organization
+- Components in `src/components/`
+- Utilities in `src/utils/`
+- Types in `src/types/`
+- Data files in `public/data/`
+
+### 2. State Management
+- React hooks for local state
+- Context for theme and global state
+- Local storage for persistence
+
+### 3. Type Safety
+- TypeScript for type checking
+- Interface definitions for data structures
+- Strict null checks
+
+### 4. UI/UX
+- Responsive design
+- Dark/light theme support
+- Hebrew RTL support
+- Accessible components
+
+## Testing and Validation
+
+### 1. Prerequisite Checking
+- Support for complex prerequisite trees
+- Validation against current semester
+- Warning system for violations
+
+### 2. Rule Validation
+- Real-time rule evaluation
+- Progress tracking
+- Multiple rule type support
+
+### 3. Data Validation
+- Course data integrity
+- Template structure validation
+- Grade input validation
+
+## Future Considerations
+
+### 1. Planned Features
+- Advanced course search
+- Multiple degree support
+- Export/import functionality
+- Statistics and analytics
+
+### 2. Performance
+- Course data optimization
+- Render optimization
+- State management improvements
+
+### 3. User Experience
+- Enhanced mobile support
+- Additional visualization options
+- Improved accessibility
+
+## Cursor-Specific Guidelines
+
+### 1. Code Generation
+- Use TypeScript for all new code
+- Follow existing patterns for component structure
+- Maintain consistent naming conventions
+
+### 2. File Organization
+- Keep related files close together
+- Use index files for clean exports
+- Follow the established directory structure
+
+### 3. Component Guidelines
+- Use functional components with hooks
+- Keep components focused and small
+- Use proper TypeScript types for props
+
+### 4. Testing
+- Write tests for critical functionality
+- Use React Testing Library
+- Mock external dependencies appropriately
+
+
+

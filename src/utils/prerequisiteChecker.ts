@@ -12,6 +12,12 @@ const getSemesterIndex = (
   return Object.keys(semesters).findIndex(key => key === entry[0]);
 };
 
+// Type for SAP-style prerequisite structures
+interface SAPPrerequisiteGroup {
+  and?: PrerequisiteItem[];
+  or?: PrerequisiteItem[];
+}
+
 /**
  * Checks if the prerequisites for a target course are met based on semester placement.
  * @param targetCourseId The ID of the course whose prerequisites are being checked.
@@ -26,7 +32,9 @@ export function checkPrerequisites(
 ): boolean {
   const targetCourseData = allCoursesData.find(c => c._id === targetCourseId);
   if (!targetCourseData?.prereqTree) {
-    console.log(`[checkPrerequisites] ${targetCourseId}: No prereqTree defined.`);
+    if (import.meta.env.DEV) {
+      console.debug(`[checkPrerequisites] ${targetCourseId}: No prereqTree defined.`);
+    }
     return true; // No prerequisites defined
   }
 
@@ -35,39 +43,52 @@ export function checkPrerequisites(
     console.warn(`[checkPrerequisites] Target course ${targetCourseId} not found in semesters.`);
     return true; // Assume ok if target placement is unclear
   }
-  console.log(`[checkPrerequisites] Checking prerequisites for ${targetCourseId} (semester ${targetSemesterIndex + 1})`);
+  if (import.meta.env.DEV) {
+    console.debug(`[checkPrerequisites] Checking prerequisites for ${targetCourseId} (semester ${targetSemesterIndex + 1})`);
+  }
 
   // Recursive helper function
-  const checkGroup = (prereq: PrerequisiteItem | PrerequisiteGroup): boolean => {
+  const checkGroup = (prereq: PrerequisiteItem | PrerequisiteGroup | SAPPrerequisiteGroup): boolean => {
     if (typeof prereq === 'string') { // Base case: simple course ID
       const prereqSemesterIndex = getSemesterIndex(prereq, templateSemesters);
       const met = prereqSemesterIndex !== -1 && prereqSemesterIndex <= targetSemesterIndex;
-      console.log(`  [checkPrerequisites] Prereq ${prereq}: in semester ${prereqSemesterIndex + 1}, met: ${met}`);
+      if (import.meta.env.DEV) {
+        console.debug(`  [checkPrerequisites] Prereq ${prereq}: in semester ${prereqSemesterIndex + 1}, met: ${met}`);
+      }
       return met;
     } else if (prereq && typeof prereq === 'object') {
       // Support for {and: [...]}, {or: [...]}
-      if (Array.isArray((prereq as any).and)) {
-        const allMet = (prereq as any).and.every(item => checkGroup(item));
-        console.log(`  [checkPrerequisites] Group 'and': met: ${allMet}`);
+      const sapPrereq = prereq as SAPPrerequisiteGroup;
+      if (Array.isArray(sapPrereq.and)) {
+        const allMet = sapPrereq.and.every(item => checkGroup(item));
+        if (import.meta.env.DEV) {
+          console.debug(`  [checkPrerequisites] Group 'and': met: ${allMet}`);
+        }
         return allMet;
       }
-      if (Array.isArray((prereq as any).or)) {
-        const oneMet = (prereq as any).or.some(item => checkGroup(item));
-        console.log(`  [checkPrerequisites] Group 'or': met: ${oneMet}`);
+      if (Array.isArray(sapPrereq.or)) {
+        const oneMet = sapPrereq.or.some(item => checkGroup(item));
+        if (import.meta.env.DEV) {
+          console.debug(`  [checkPrerequisites] Group 'or': met: ${oneMet}`);
+        }
         return oneMet;
       }
       // Existing support for { type: 'all' | 'one', list: [...] }
-      if (Array.isArray((prereq as PrerequisiteGroup).list)) {
-        const group = prereq as PrerequisiteGroup;
+      const group = prereq as PrerequisiteGroup;
+      if (Array.isArray(group.list)) {
         switch (group.type) {
           case 'all': {
             const allMet = group.list.every(item => checkGroup(item));
-            console.log(`  [checkPrerequisites] Group 'all': met: ${allMet}`);
+            if (import.meta.env.DEV) {
+              console.debug(`  [checkPrerequisites] Group 'all': met: ${allMet}`);
+            }
             return allMet;
           }
           case 'one': {
             const oneMet = group.list.some(item => checkGroup(item));
-            console.log(`  [checkPrerequisites] Group 'one': met: ${oneMet}`);
+            if (import.meta.env.DEV) {
+              console.debug(`  [checkPrerequisites] Group 'one': met: ${oneMet}`);
+            }
             return oneMet;
           }
           default:
@@ -82,6 +103,8 @@ export function checkPrerequisites(
   };
 
   const result = checkGroup(targetCourseData.prereqTree);
-  console.log(`[checkPrerequisites] Result for ${targetCourseId}: ${result}`);
+  if (import.meta.env.DEV) {
+    console.debug(`[checkPrerequisites] Result for ${targetCourseId}: ${result}`);
+  }
   return result;
 } 
