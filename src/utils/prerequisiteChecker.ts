@@ -12,10 +12,24 @@ const getSemesterIndex = (
   return Object.keys(semesters).findIndex(key => key === entry[0]);
 };
 
+// Helper to get equivalent courses (including no_additional_credit_courses)
+const getEquivalentCourses = (courseId: string, allCoursesData: RawCourseData[]): Set<string> => {
+  const equivalents = new Set<string>([courseId]);
+  const course = allCoursesData.find(c => c._id === courseId);
+  
+  if (course?.no_credit_courses) {
+    // Split by comma or one or more whitespace characters, then trim any remaining whitespace from individual IDs
+    const equivalentIds = course.no_credit_courses.split(/[,\s]+/).map(id => id.trim()).filter(id => id); // filter empty strings
+    equivalentIds.forEach(id => equivalents.add(id));
+  }
+  
+  return equivalents;
+};
+
 // Type for SAP-style prerequisite structures
 interface SAPPrerequisiteGroup {
-  and?: PrerequisiteItem[];
-  or?: PrerequisiteItem[];
+  and?: (PrerequisiteItem | PrerequisiteGroup)[];
+  or?: (PrerequisiteItem | PrerequisiteGroup)[];
 }
 
 /**
@@ -50,10 +64,20 @@ export function checkPrerequisites(
   // Recursive helper function
   const checkGroup = (prereq: PrerequisiteItem | PrerequisiteGroup | SAPPrerequisiteGroup): boolean => {
     if (typeof prereq === 'string') { // Base case: simple course ID
-      const prereqSemesterIndex = getSemesterIndex(prereq, templateSemesters);
-      const met = prereqSemesterIndex !== -1 && prereqSemesterIndex <= targetSemesterIndex;
+      const equivalentCourses = getEquivalentCourses(prereq, allCoursesData);
+      let met = false;
+      
+      // Check if any equivalent course is in a valid semester
+      for (const courseId of equivalentCourses) {
+        const prereqSemesterIndex = getSemesterIndex(courseId, templateSemesters);
+        if (prereqSemesterIndex !== -1 && prereqSemesterIndex <= targetSemesterIndex) {
+          met = true;
+          break;
+        }
+      }
+      
       if (import.meta.env.DEV) {
-        console.debug(`  [checkPrerequisites] Prereq ${prereq}: in semester ${prereqSemesterIndex + 1}, met: ${met}`);
+        console.debug(`  [checkPrerequisites] Prereq ${prereq} (and equivalents): met: ${met}`);
       }
       return met;
     } else if (prereq && typeof prereq === 'object') {

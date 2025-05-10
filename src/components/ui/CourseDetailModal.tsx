@@ -1,13 +1,14 @@
 import React from 'react';
-import { RawCourseData, PrerequisiteGroup } from '../../types/data';
-import PrereqTreeDisplay, { HandledPrereq } from './PrereqTreeDisplay';
 import BaseModal from './BaseModal';
+import { RawCourseData, PrerequisiteGroup } from '../../types/data';
+import PrereqCourseIdWithTooltip from './PrereqCourseIdWithTooltip';
+import PrereqTreeDisplay, { HandledPrereq } from './PrereqTreeDisplay';
 
 interface CourseDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   course: RawCourseData | null;
-  allCourses?: RawCourseData[];
+  allCourses: RawCourseData[];
 }
 
 export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, onClose, course, allCourses }) => {
@@ -23,7 +24,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
   const faculty = course.faculty;
   const semesters = Array.isArray(course.semester) ? course.semester.join(', ') : (course.semester || 'לא צוין');
   const descriptionFromInfo = course.info;
-  const prerequisitesText = course.prerequisites;
+  const prerequisitesText = course.prerequisites as string | undefined;
   const courseUrl = course.url;
   const syllabus = course.syllabus;
   const studyProgram = course.study_program;
@@ -34,8 +35,47 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
   const examBDate = course.exam_b;
   const prereqTreeData = course.prereqTree;
 
-  return (
-    <BaseModal isOpen={isOpen} onClose={onClose} title={courseName} maxWidth='max-w-lg'>
+  const isValidPrereqTree = (data: unknown): data is HandledPrereq => {
+    if (!data) return false;
+    if (typeof data === 'string') return true;
+    if (typeof data === 'object' && data !== null) {
+      const obj = data as Record<string, unknown>;
+      if (Array.isArray(obj.or) && obj.or.every(item => isValidPrereqTree(item))) return true;
+      if (Array.isArray(obj.and) && obj.and.every(item => isValidPrereqTree(item))) return true;
+      if (Array.isArray(obj.list) && typeof obj.type === 'string') {
+        const group = obj as unknown as PrerequisiteGroup;
+        return group.list.every(item => isValidPrereqTree(item));
+      }
+    }
+    return false;
+  };
+
+  const renderPrereqTree = (): React.ReactNode => {
+    if (!prereqTreeData) return null;
+    if (!isValidPrereqTree(prereqTreeData)) {
+      return <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">אין מידע קדם מובנה זמין עבור קורס זה.</p>;
+    }
+    return (
+      <div className="mt-1 pl-2">
+        <PrereqTreeDisplay prereq={prereqTreeData} allCourses={allCourses} />
+      </div>
+    );
+  };
+
+  const renderPrereqSection = (): React.ReactNode | null => {
+    if (!prereqTreeData) return null;
+    const treeContent = renderPrereqTree();
+    if (!treeContent) return null;
+    return (
+      <div>
+        <strong className="font-medium text-gray-800 dark:text-gray-100">דרישות קדם (מבנה לוגי):</strong>
+        {treeContent}
+      </div>
+    );
+  };
+
+  const renderContent = () => {
+    return (
       <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
         <p><strong className="font-medium text-gray-800 dark:text-gray-100">מספר קורס:</strong> {courseId}</p>
         <p><strong className="font-medium text-gray-800 dark:text-gray-100">נקודות זכות:</strong> {courseCredits}</p>
@@ -58,26 +98,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
           </div>
         )}
 
-        {prereqTreeData && (
-          <div>
-            <strong className="font-medium text-gray-800 dark:text-gray-100">דרישות קדם (מבנה לוגי):</strong>
-            { (
-                typeof prereqTreeData === 'string' || 
-                (typeof prereqTreeData === 'object' && prereqTreeData !== null && (
-                  Array.isArray((prereqTreeData as { or?: [] }).or) || 
-                  Array.isArray((prereqTreeData as { and?: [] }).and) || 
-                  (Array.isArray((prereqTreeData as PrerequisiteGroup).list) && typeof (prereqTreeData as PrerequisiteGroup).type === 'string')
-                ))
-              ) ? (
-                <div className="mt-1 pl-2">
-                  <PrereqTreeDisplay prereq={prereqTreeData as HandledPrereq} allCourses={allCourses} />
-                </div>
-              ) : (
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">אין מידע קדם מובנה זמין עבור קורס זה.</p>
-              )
-            }
-          </div>
-        )}
+        {renderPrereqSection()}
 
         {syllabus && (
           <div>
@@ -87,7 +108,22 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
         )}
 
         {studyProgram && <p><strong className="font-medium text-gray-800 dark:text-gray-100">תוכנית לימודים:</strong> {studyProgram}</p>}
-        {noCreditCourses && <p><strong className="font-medium text-gray-800 dark:text-gray-100">קורסים ללא אשראי חופף:</strong> {noCreditCourses}</p>}
+        
+        {noCreditCourses && (
+          <div>
+            <strong className="font-medium text-gray-800 dark:text-gray-100">קורסים ללא זיכוי נוסף:</strong>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {noCreditCourses.split(/[,\s]+/).map(id => id.trim()).filter(id => id).map((courseId, index) => (
+                <PrereqCourseIdWithTooltip 
+                  key={index} 
+                  courseId={courseId} 
+                  allCourses={allCourses} 
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        
         {lecturer && <p><strong className="font-medium text-gray-800 dark:text-gray-100">מרצה:</strong> {lecturer}</p>}
         
         {notes && (
@@ -109,6 +145,12 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
           </p>
         )}
       </div>
+    );
+  };
+
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title={courseName} maxWidth='max-w-lg'>
+      {renderContent()}
     </BaseModal>
   );
 }; 
