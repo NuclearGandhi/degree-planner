@@ -26,10 +26,6 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
   return (
     <div 
       dir="rtl"
-      onDoubleClick={(event) => { 
-        event.stopPropagation(); // Prevent React Flow from handling it (e.g., zoom)
-        data.onDoubleClick?.(data.courseId);
-      }}
       className={`course-node relative shadow-md p-3 pl-4 pr-4 border rounded-lg !bg-white w-[240px] h-[120px] 
                   dark:!bg-gray-800 dark:!border-gray-700 
                   ${selected ? '!border-blue-500 ring-2 ring-blue-500' : '!border-gray-300 dark:!border-gray-600'}

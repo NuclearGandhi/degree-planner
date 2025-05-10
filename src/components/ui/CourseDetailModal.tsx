@@ -9,9 +9,10 @@ interface CourseDetailModalProps {
   onClose: () => void;
   course: RawCourseData | null;
   allCourses: RawCourseData[];
+  coursesInPlanIds?: Set<string>;
 }
 
-export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, onClose, course, allCourses }) => {
+export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, onClose, course, allCourses, coursesInPlanIds }) => {
   if (!isOpen || !course) {
     return null;
   }
@@ -57,7 +58,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
     }
     return (
       <div className="mt-1 pl-2">
-        <PrereqTreeDisplay prereq={prereqTreeData} allCourses={allCourses} />
+        <PrereqTreeDisplay prereq={prereqTreeData} allCourses={allCourses} coursesInPlanIds={coursesInPlanIds} />
       </div>
     );
   };

@@ -14,9 +14,10 @@ interface PrereqTreeDisplayProps {
   prereq: HandledPrereq | null | undefined; // Allow null/undefined for safety
   isTopLevel?: boolean;
   allCourses?: RawCourseData[]; // Add allCourses prop
+  coursesInPlanIds?: Set<string>; // Added optional prop
 }
 
-const PrereqTreeDisplay: React.FC<PrereqTreeDisplayProps> = ({ prereq, isTopLevel = true, allCourses }) => {
+const PrereqTreeDisplay: React.FC<PrereqTreeDisplayProps> = ({ prereq, isTopLevel = true, allCourses, coursesInPlanIds }) => {
   if (!prereq) {
     // Handles null, undefined, or potentially empty objects if they sneak through previous checks
     return <span className="text-xs text-gray-500 italic">אין מידע קדם זמין.</span>;
@@ -24,7 +25,7 @@ const PrereqTreeDisplay: React.FC<PrereqTreeDisplayProps> = ({ prereq, isTopLeve
 
   if (typeof prereq === 'string') {
     const courseId = prereq;
-    return <PrereqCourseIdWithTooltip courseId={courseId} allCourses={allCourses} />;
+    return <PrereqCourseIdWithTooltip courseId={courseId} allCourses={allCourses} coursesInPlanIds={coursesInPlanIds} />;
   }
 
   let groupTitle = '';
@@ -77,7 +78,7 @@ const PrereqTreeDisplay: React.FC<PrereqTreeDisplayProps> = ({ prereq, isTopLeve
         <div className={`p-2 my-1 rounded-md bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 shadow-sm flex flex-wrap items-center gap-1.5`}>
           {itemsToRender.map((item, index) => (
             <React.Fragment key={index}>
-              <PrereqTreeDisplay prereq={item} isTopLevel={false} allCourses={allCourses} />
+              <PrereqTreeDisplay prereq={item} isTopLevel={false} allCourses={allCourses} coursesInPlanIds={coursesInPlanIds} />
               {index < itemsToRender.length - 1 && 
                 <span className="font-semibold text-indigo-700 dark:text-indigo-300">וגם</span>}
             </React.Fragment>
@@ -90,7 +91,7 @@ const PrereqTreeDisplay: React.FC<PrereqTreeDisplayProps> = ({ prereq, isTopLeve
           {itemsToRender.map((item, index) => (
             <React.Fragment key={index}>
               <div className="flex justify-center">
-                <PrereqTreeDisplay prereq={item} isTopLevel={false} allCourses={allCourses} />
+                <PrereqTreeDisplay prereq={item} isTopLevel={false} allCourses={allCourses} coursesInPlanIds={coursesInPlanIds} />
               </div>
               {index < itemsToRender.length - 1 && 
                 <div className="text-center my-1.5">
@@ -105,7 +106,7 @@ const PrereqTreeDisplay: React.FC<PrereqTreeDisplayProps> = ({ prereq, isTopLeve
         <ul className="list-disc pl-6 mt-1 space-y-1">
           {itemsToRender.map((item, index) => (
             <li key={index} className="text-sm">
-              <PrereqTreeDisplay prereq={item} isTopLevel={false} allCourses={allCourses} />
+              <PrereqTreeDisplay prereq={item} isTopLevel={false} allCourses={allCourses} coursesInPlanIds={coursesInPlanIds} />
             </li>
           ))}
         </ul>

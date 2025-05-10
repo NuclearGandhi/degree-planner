@@ -58,6 +58,11 @@ const CONSOLIDATED_RULES_NODE_ID = 'consolidated-rules-node';
 
 type SaveStatus = 'idle' | 'saving' | 'saved'; // New type for save status
 
+interface CourseDetailModalData {
+  course: RawCourseData;
+  coursesInPlanIds: Set<string>;
+}
+
 const transformDataToNodes = (
   template: DegreeTemplate | undefined,
   allCourses: RawCourseData[],
@@ -67,7 +72,6 @@ const transformDataToNodes = (
   onGradeChangeCallback: (courseId: string, grade: string) => void,
   onRemoveCourseCallback: (courseId: string) => void,
   initialMandatoryCourseIds?: string[],
-  onCourseDoubleClickCallback?: (courseId: string) => void,
   onEditRuleCallback?: (ruleId: string) => void,
   onDeleteRuleCallback?: (ruleId: string) => void
 ): AppNode[] => {
@@ -260,7 +264,6 @@ const transformDataToNodes = (
           onGradeChange: onGradeChangeCallback,
           onRemoveCourse: onRemoveCourseCallback,
           prerequisitesMet: prereqsMet,
-          onDoubleClick: onCourseDoubleClickCallback
         },
       });
       currentYInSemester += NODE_HEIGHT_COURSE + VERTICAL_SPACING_RULE;
@@ -373,8 +376,8 @@ function DegreePlanView() {
   const [targetSemesterForModal, setTargetSemesterForModal] = useState<number | null>(null);
 
   // State for course detail modal
+  const [selectedCourseForDetailModal, setSelectedCourseForDetailModal] = useState<CourseDetailModalData | null>(null);
   const [isCourseDetailModalOpen, setIsCourseDetailModalOpen] = useState(false);
-  const [detailedCourseInfo, setDetailedCourseInfo] = useState<RawCourseData | null>(null);
 
   // State for Rule Editor Modal
   const [isRuleEditorModalOpen, setIsRuleEditorModalOpen] = useState(false);
@@ -390,6 +393,17 @@ function DegreePlanView() {
   const [isLoading, setIsLoading] = useState<boolean>(true); // Loading state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const autosaveTimeoutRef = useRef<number | null>(null);
+
+  // Memoized values
+  const coursesInPlanFlatIds = useMemo(() => {
+    if (!degreeTemplate || !degreeTemplate.semesters) return new Set<string>();
+    return new Set(Object.values(degreeTemplate.semesters).flat().filter(id => typeof id === 'string')) as Set<string>;
+  }, [degreeTemplate]);
+
+  const initialMandatoryCourseIds = useMemo(() => {
+    if (!degreeTemplate || !degreeTemplate.definedMandatoryCourseIds) return undefined;
+    return degreeTemplate.definedMandatoryCourseIds;
+  }, [degreeTemplate]);
 
   const handleAddCourseToSemesterCallback = useCallback((semesterNumber: number) => {
     console.log(`DegreePlanView: Request to add course to semester: ${semesterNumber}`);
@@ -484,15 +498,43 @@ function DegreePlanView() {
     // Alternatively, to clear all selection: setSelectedNodes([]);
   }, [setDegreeTemplate, setGrades, setSelectedNodes]); // Added setSelectedNodes to dependencies
 
-  // Callback for course node double-click
-  const handleCourseNodeDoubleClick = useCallback((courseId: string) => {
-    if (!Array.isArray(allCourses)) return;
-    const courseToShow = allCourses.find(c => c._id === courseId);
-    if (courseToShow) {
-      setDetailedCourseInfo(courseToShow);
-      setIsCourseDetailModalOpen(true);
+  // Node double-click handler
+  const handleNodeDoubleClick = useCallback((_event: React.MouseEvent, node: AppNode) => {
+    console.log('[DegreePlanView] handleNodeDoubleClick called with node:', node);
+    if (node.type === 'course' && node.data) {
+      const courseId = node.data.courseId as string;
+      const foundCourse = allCourses.find(c => c._id === courseId);
+      if (foundCourse) {
+        setSelectedCourseForDetailModal({ course: foundCourse, coursesInPlanIds: coursesInPlanFlatIds });
+        setIsCourseDetailModalOpen(true);
+      }
     }
-  }, [allCourses]);
+    if (node.type === 'rule' && node.data && node.data.id) {
+      const ruleId = node.data.id as string;
+      if (ruleId === CONSOLIDATED_RULES_NODE_ID) {
+        const rulesToEdit = degreeTemplate?.rules?.filter(rule =>
+          new Set([
+            'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
+            'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList'
+          ]).has(rule.type)
+        ) || [];
+        if (rulesToEdit.length > 0) {
+          setRulesForConsolidatedEditing(rulesToEdit);
+          setIsConsolidatedRuleModalOpen(true);
+        }
+      } else {
+        const ruleToEdit = degreeTemplate?.rules?.find(r => r.id === ruleId);
+        if (ruleToEdit) {
+          setCurrentRuleForEditing(ruleToEdit);
+          setIsRuleEditorModalOpen(true);
+        }
+      }
+    }
+  }, [allCourses, coursesInPlanFlatIds, degreeTemplate, setIsCourseDetailModalOpen, setSelectedCourseForDetailModal, setCurrentRuleForEditing, setIsRuleEditorModalOpen, setRulesForConsolidatedEditing, setIsConsolidatedRuleModalOpen]);
+
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: AppNode) => {
+    console.log('[DegreePlanView] handleNodeClick called with node:', node);
+  }, []);
 
   // Rule Editor Handlers
   const handleCloseRuleEditor = useCallback(() => {
@@ -765,8 +807,7 @@ function DegreePlanView() {
       handleAddSemesterCallback,
       handleGradeChangeCallback,
       handleRemoveCourseCallback,
-      degreeTemplate?.definedMandatoryCourseIds,
-      handleCourseNodeDoubleClick,
+      initialMandatoryCourseIds,
       handleEditRule,
       handleDeleteRule
     );
@@ -775,7 +816,7 @@ function DegreePlanView() {
     // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
     setNodes(newNodes);
     setEdges(newEdges); // This sets the base edges
-  }, [degreeTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, handleCourseNodeDoubleClick, handleEditRule, handleDeleteRule]);
+  }, [degreeTemplate, allCourses, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, handleEditRule, handleDeleteRule, initialMandatoryCourseIds]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);
@@ -835,6 +876,8 @@ function DegreePlanView() {
           nodesConnectable={false}
           selectNodesOnDrag={false}
           zoomOnDoubleClick={false}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          onNodeClick={handleNodeClick}
         >
           <Controls />
           {/* <MiniMap /> */}
@@ -848,12 +891,18 @@ function DegreePlanView() {
         onSelectCourse={handleSelectCourseFromModal}
         semesterNumber={targetSemesterForModal}
       />
-      <CourseDetailModal 
-        isOpen={isCourseDetailModalOpen}
-        onClose={() => setIsCourseDetailModalOpen(false)}
-        course={detailedCourseInfo}
-        allCourses={allCourses}
-      />
+      {selectedCourseForDetailModal && selectedCourseForDetailModal.course && (
+        <CourseDetailModal
+          isOpen={isCourseDetailModalOpen}
+          onClose={() => {
+            setIsCourseDetailModalOpen(false);
+            setSelectedCourseForDetailModal(null); // Clear the whole object
+          }}
+          course={selectedCourseForDetailModal.course} // This is now guaranteed to be RawCourseData
+          allCourses={allCourses}
+          coursesInPlanIds={selectedCourseForDetailModal.coursesInPlanIds}
+        />
+      )}
       <RuleEditorModal
         isOpen={isRuleEditorModalOpen}
         rule={currentRuleForEditing}

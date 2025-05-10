@@ -12,8 +12,8 @@ const getSemesterIndex = (
   return Object.keys(semesters).findIndex(key => key === entry[0]);
 };
 
-// Helper to get equivalent courses (including no_additional_credit_courses)
-const getEquivalentCourses = (courseId: string, allCoursesData: RawCourseData[]): Set<string> => {
+// Helper to get equivalent courses (including no_credit_courses)
+export const getEquivalentCourses = (courseId: string, allCoursesData: RawCourseData[]): Set<string> => {
   const equivalents = new Set<string>([courseId]);
   const course = allCoursesData.find(c => c._id === courseId);
   

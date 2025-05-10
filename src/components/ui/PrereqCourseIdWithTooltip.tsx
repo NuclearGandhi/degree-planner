@@ -1,39 +1,74 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RawCourseData } from '../../types/data';
+import { getEquivalentCourses } from '../../utils/prerequisiteChecker';
 
 interface PrereqCourseIdWithTooltipProps {
   courseId: string;
   allCourses?: RawCourseData[];
+  coursesInPlanIds?: Set<string>;
 }
 
-const PrereqCourseIdWithTooltip: React.FC<PrereqCourseIdWithTooltipProps> = ({ courseId, allCourses }) => {
-  const [isHovering, setIsHovering] = useState(false);
+const PrereqCourseIdWithTooltip: React.FC<PrereqCourseIdWithTooltipProps> = ({ courseId, allCourses, coursesInPlanIds }) => {
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const [courseName, setCourseName] = useState<string | null>(null);
+  const [isMet, setIsMet] = useState(false);
 
-  const courseName = allCourses?.find(c => c._id === courseId)?.name;
-  const tooltipText = courseName ? `${courseName} (${courseId})` : null; // Only show tooltip if name found
+  useEffect(() => {
+    if (allCourses) {
+      const foundCourse = allCourses.find(c => c._id === courseId);
+      setCourseName(foundCourse ? foundCourse.name : null);
+
+      if (coursesInPlanIds && courseId) {
+        const equivalentCourses = getEquivalentCourses(courseId, allCourses);
+        let met = false;
+        for (const eqCourseId of equivalentCourses) {
+          if (coursesInPlanIds.has(eqCourseId)) {
+            met = true;
+            break;
+          }
+        }
+        setIsMet(met);
+      } else {
+        setIsMet(false);
+      }
+    }
+  }, [courseId, allCourses, coursesInPlanIds]);
 
   const handleMouseEnter = () => {
-    if (tooltipText) {
-      setIsHovering(true);
+    if (courseName) {
+      setTooltipVisible(true);
     }
   };
 
   const handleMouseLeave = () => {
-    setIsHovering(false);
+    setTooltipVisible(false);
   };
+
+  const courseDisplayId = courseId;
+  // Display only the course ID as the main text
+  const displayText = courseDisplayId;
+  // Tooltip text includes the name if available
+  const tooltipTextContent = courseName ? `${courseName} (${courseDisplayId})` : courseDisplayId;
+
+  // Base styling for the badge
+  const baseBadgeStyle = "font-mono bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-sm shadow-sm cursor-pointer relative";
+  // Conditional text color
+  const conditionalTextStyle = isMet ? 'text-green-700 dark:text-green-400 font-semibold' : 'text-gray-800 dark:text-gray-200';
 
   return (
     <span 
-      className="relative font-mono bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-sm shadow-sm cursor-default" // Added relative and cursor
+      className={`${baseBadgeStyle} ${conditionalTextStyle}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      aria-label={`Course: ${displayText}`}
     >
-      {courseId}
-      {isHovering && tooltipText && (
+      {displayText}
+      {tooltipVisible && (
         <div 
-          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-medium text-white bg-gray-900/90 dark:bg-gray-100/90 dark:text-black rounded-md shadow-lg max-w-xs text-center z-10 transition-opacity duration-100 opacity-100"
+          // Use absolute positioning relative to the span for the tooltip with arrow
+          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-medium text-white bg-gray-900/90 dark:bg-gray-100/90 dark:text-black rounded-md shadow-lg max-w-xs text-center z-50 transition-opacity duration-100 opacity-100"
         >
-          {tooltipText}
+          {tooltipTextContent}
           <div className="absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900/90 dark:border-t-gray-100/90"></div>
         </div>
       )}
