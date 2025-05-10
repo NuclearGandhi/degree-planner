@@ -307,36 +307,24 @@ const transformDataToEdges = (
   }
 
   const edges: AppEdge[] = [];
+  const edgeIdSet = new Set<string>(); // Track unique edge IDs
   const allCourseIdsInPlan = Object.values(template.semesters).flat();
   console.log('[transformDataToEdges] All course IDs in current plan:', allCourseIdsInPlan);
 
   const isCourseInPlan = (courseId: string): boolean => {
     const result = allCourseIdsInPlan.includes(courseId);
-    // console.log(`[transformDataToEdges] isCourseInPlan check: courseId=${courseId}, inPlan=${result}`); // Can be too verbose
     return result;
   };
 
-  // Iterate over each course in the plan to find its prerequisites
   allCourseIdsInPlan.forEach(courseId => {
     const course = allCourses.find(c => c._id === courseId);
-    console.log(`[transformDataToEdges] Processing courseId: ${courseId}`);
-    if (course) {
-      console.log(`[transformDataToEdges] Found course data for ${courseId}. Prerequisites:`, JSON.stringify(course.prereqTree, null, 2));
-    } else {
-      console.log(`[transformDataToEdges] Course data NOT FOUND for ${courseId} in allCourses.`);
-      return; // Skip if course data not found
-    }
-
     if (course && course.prereqTree) {
       const processPrerequisites = (prereq: PrerequisiteItem | PrerequisiteGroup | { or?: (PrerequisiteItem | PrerequisiteGroup)[], and?: (PrerequisiteItem | PrerequisiteGroup)[] }, targetCourseId: string) => {
-        if (typeof prereq === 'string') { // Prereq is a course ID
-          console.log(`[transformDataToEdges] processPrerequisites: Checking simple prereq string: '${prereq}' for target '${targetCourseId}'`);
-          const sourceInPlan = isCourseInPlan(prereq);
-          console.log(`[transformDataToEdges] processPrerequisites: Is prereq '${prereq}' in plan? ${sourceInPlan}`);
-          if (sourceInPlan) {
-            console.log(`[transformDataToEdges] ADDING EDGE: from '${prereq}' to '${targetCourseId}'`);
+        if (typeof prereq === 'string') {
+          const edgeId = `edge-${prereq}-${targetCourseId}`;
+          if (isCourseInPlan(prereq) && !edgeIdSet.has(edgeId)) {
             edges.push({
-              id: `edge-${prereq}-${targetCourseId}`,
+              id: edgeId,
               source: prereq,
               target: targetCourseId,
               type: 'default',
@@ -345,34 +333,23 @@ const transformDataToEdges = (
               style: { stroke: '#cccccc', strokeWidth: 1.5, strokeOpacity: 0.2 },
               pathOptions: { curvature: 0.25 }
             });
+            edgeIdSet.add(edgeId);
           }
         } else if (prereq && typeof prereq === 'object') {
           let itemsToProcess: (PrerequisiteItem | PrerequisiteGroup)[] = [];
           if (Array.isArray((prereq as { or?: [] }).or)) {
-            console.log(`[transformDataToEdges] processPrerequisites: Processing OR group for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
             itemsToProcess = (prereq as { or: [] }).or;
           } else if (Array.isArray((prereq as { and?: [] }).and)) {
-            console.log(`[transformDataToEdges] processPrerequisites: Processing AND group for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
             itemsToProcess = (prereq as { and: [] }).and;
           } else if (Array.isArray((prereq as PrerequisiteGroup).list)) {
-            // This handles the case where the structure is { type: '...', list: [...] }
-            console.log(`[transformDataToEdges] processPrerequisites: Processing direct LIST group for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
             itemsToProcess = (prereq as PrerequisiteGroup).list;
           }
-
           if (itemsToProcess.length > 0) {
             itemsToProcess.forEach(item => processPrerequisites(item, targetCourseId));
-          } else if (Object.keys(prereq).length > 0) { // Avoid logging for empty objects if any slip through
-            console.log(`[transformDataToEdges] processPrerequisites: Skipping unknown object prereq type or empty list for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
           }
-        } else if (prereq) {
-            // This case might not be reached if the object handling is comprehensive
-            console.log(`[transformDataToEdges] processPrerequisites: Fallback - Skipping unknown prereq type for target '${targetCourseId}':`, JSON.stringify(prereq, null, 2));
         }
       };
       processPrerequisites(course.prereqTree, courseId);
-    } else {
-      console.log(`[transformDataToEdges] Course ${courseId} has no prerequisites or course data missing.`);
     }
   });
   console.log('[transformDataToEdges] Finished. Total edges generated:', edges.length);
@@ -380,9 +357,9 @@ const transformDataToEdges = (
 };
 
 function DegreePlanView() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode[]>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge[]>([]);
-  const [selectedNodes, setSelectedNodes] = useState<AppNode[]>([]); // Added state for selected nodes
+  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge>([]);
+  const [selectedNodes, setSelectedNodes] = useState<AppNode[]>([]);
   
   const { theme } = useTheme();
 
@@ -518,25 +495,13 @@ function DegreePlanView() {
   }, [allCourses]);
 
   // Rule Editor Handlers
-  const handleOpenRuleEditor = useCallback((ruleId: string) => {
-    if (degreeTemplate && degreeTemplate.rules) {
-      const ruleToEdit = degreeTemplate.rules.find(r => r.id === ruleId);
-      if (ruleToEdit) {
-        setCurrentRuleForEditing(ruleToEdit);
-        setIsRuleEditorModalOpen(true);
-      } else {
-        console.warn(`Rule with id ${ruleId} not found.`);
-      }
-    }
-  }, [degreeTemplate]);
-
   const handleCloseRuleEditor = useCallback(() => {
     setCurrentRuleForEditing(null);
     setIsRuleEditorModalOpen(false);
   }, []);
 
   const handleSaveRule = useCallback((updatedRule: DegreeRule) => {
-    if (!degreeTemplate) return;
+    if (!degreeTemplate || !degreeTemplate.rules) return;
     const updatedRules = degreeTemplate.rules.map(r => r.id === updatedRule.id ? updatedRule : r);
     const newDegreeTemplate = { ...degreeTemplate, rules: updatedRules };
     setDegreeTemplate(newDegreeTemplate);
@@ -894,7 +859,6 @@ function DegreePlanView() {
         rule={currentRuleForEditing}
         onClose={handleCloseRuleEditor}
         onSave={handleSaveRule}
-        allCourses={allCourses}
         availableCourseListNames={degreeTemplate && degreeTemplate["courses-lists"] ? Object.keys(degreeTemplate["courses-lists"]) : []}
       />
       <CourseListEditorModal
