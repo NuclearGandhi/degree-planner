@@ -11,7 +11,6 @@ export interface RawCourseData {
   semester: ("אביב" | "חורף" | "קיץ" | "שנתי" | string)[]; // Array of semesters course is given
   faculty: string;
   description?: string;
-  prerequisites?: string;
   prereqTree?: PrerequisiteItem | PrerequisiteGroup;
   info?: string;
   url?: string;
