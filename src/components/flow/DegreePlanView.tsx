@@ -465,7 +465,8 @@ function DegreePlanView() {
   // Moved isLoading, setIsLoading, and autosaveTimeoutRef to the top with other hooks
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const autosaveTimeoutRef = useRef<number | null>(null);
-  const classificationCreditsDebounceTimeoutRef = useRef<number | null>(null); // Ref for debounce timeout
+  // const idleTimeoutRef = useRef<number | null>(null); // No longer needed for persistent 'saved' state
+  const classificationCreditsDebounceTimeoutRef = useRef<number | null>(null);
 
   // NEW STATE and HANDLER for classification checkboxes
   const [classificationChecked, setClassificationChecked] = useState<Record<string, boolean>>(initialClassificationCheckedState);
@@ -754,24 +755,39 @@ function DegreePlanView() {
 
   // Autosave Effect
   useEffect(() => {
+    if (isLoading || !degreeTemplate) {
+      return;
+    }
+
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current);
     }
+    // if (idleTimeoutRef.current) { // No longer needed
+    //   clearTimeout(idleTimeoutRef.current);
+    // }
+
+    setSaveStatus('saving');
+
     autosaveTimeoutRef.current = window.setTimeout(() => {
-      if (degreeTemplate && !isLoading) { // Ensure template is loaded and not in initial loading phase
-        console.log("[DegreePlanView] Autosaving plan...");
-        savePlan(degreeTemplate, grades, classificationChecked, classificationCredits); // Pass classificationChecked and classificationCredits
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000); // Reset status after 2s
-      }
-    }, 1500); // Autosave 1.5 seconds after last relevant change
+      console.log("[DegreePlanView] Autosaving plan...");
+      savePlan(degreeTemplate, grades, classificationChecked, classificationCredits);
+      setSaveStatus('saved'); // Stays 'saved' until next change
+
+      // No longer setting a timeout to go back to idle
+      // idleTimeoutRef.current = window.setTimeout(() => {
+      //   setSaveStatus('idle');
+      // }, 3000);
+    }, 1500);
 
     return () => {
       if (autosaveTimeoutRef.current) {
         clearTimeout(autosaveTimeoutRef.current);
       }
+      // if (idleTimeoutRef.current) { // No longer needed
+      //   clearTimeout(idleTimeoutRef.current);
+      // }
     };
-  }, [degreeTemplate, grades, classificationChecked, classificationCredits, isLoading]); // Added classificationChecked, classificationCredits and isLoading
+  }, [degreeTemplate, grades, classificationChecked, classificationCredits, isLoading]);
 
   // Initial Data Load Effect
   useEffect(() => {
@@ -963,7 +979,7 @@ function DegreePlanView() {
         <ThemeToggleButton />
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
         {/* Save Status */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center min-w-[50px] text-center">
           {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}
           {saveStatus === 'saved' && <span className="text-xs text-green-600 dark:text-green-400 p-1 bg-green-100 dark:bg-green-800 rounded">נשמר ✓</span>}
         </div>
