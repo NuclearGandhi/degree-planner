@@ -222,6 +222,43 @@ def main():
         spring_map = build_course_map(spring_courses, 'אביב')
         merged_map = merge_course_maps(winter_map, spring_map)
         
+        # Add the special course
+        merged_map["01130013"] = {
+            "_id": "01130013",
+            "name": "סיווג פיזיקה מכניקה",
+            "credits": 0,
+            # Explicitly set other common fields to None or empty if they are expected by the consuming code
+            "prereqTree": None, 
+            "semesters": [], # Or None, depending on how it's handled later
+            "syllabus": None,
+            "faculty": None,
+            "study_program": None,
+            "no_credit_courses": None,
+            "lecturer": None,
+            "notes": None,
+            "exam_a": None,
+            "exam_b": None,
+            "quiz_a": None
+        }
+
+        # Add the second special course
+        merged_map["01130014"] = {
+            "_id": "01130014",
+            "name": "סיווג פיזיקה חשמל",
+            "credits": 0,
+            "prereqTree": None,
+            "semesters": [],
+            "syllabus": None,
+            "faculty": None,
+            "study_program": None,
+            "no_credit_courses": None,
+            "lecturer": None,
+            "notes": None,
+            "exam_a": None,
+            "exam_b": None,
+            "quiz_a": None
+        }
+        
         # Save the merged map
         with open(f"{public_data_dir}/merged_courses.json", "w", encoding="utf-8") as f:
             json.dump(merged_map, f, ensure_ascii=False, indent=4)
