@@ -1,11 +1,27 @@
 {
+  "globalRules": [
+    {
+      "id": "classification_courses_rule",
+      "description": "פטורים",
+      "type": "classification_courses",
+      "courses": [
+        { "id": "01130013", "name": "סיווג פיזיקה מכניקה" },
+        { "id": "01130014", "name": "סיווג פיזיקה חשמל" },
+        {
+          "id": "miluim_exemption",
+          "name": "פטור מילואים",
+          "creditInput": { "max": 10, "step": 0.5 }
+        }
+      ]
+    }
+  ],
   "mechanical-engineering-general": {
     "name": "הנדסת מכונות - כללי",
     "credits-from-malag": 6,
     "credits-from-sports": 2,
     "credits-from-final-project": 6,
     "semesters": {
-      "סמסטר א'": ["01040041", "01040065", "01250001", "02340128", "03240033", "01130013", "01130014"],
+      "סמסטר א'": ["01040041", "01040065", "01250001", "02340128", "03240033"],
       "סמסטר ב'": [
         "00340048",
         "00340028",

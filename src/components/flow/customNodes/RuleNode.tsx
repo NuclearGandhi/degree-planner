@@ -3,17 +3,30 @@ import { NodeProps, Node as RFNode } from '@xyflow/react'; // No Handles needed 
 import { RuleNodeData } from '../../../types/flow'; // Adjusted import path, removed RuleNodeData import
 
 const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) => {
+  const isExemptionNode = data.id === 'classification_courses_rule'; // Check if it's the exemptions node
+
   const isSatisfied = data.isSatisfied;
-  const statusColor = isSatisfied 
+  const baseStatusColor = isSatisfied 
     ? '!bg-green-100 dark:!bg-green-800 !border-green-600 dark:!border-green-700'
     : '!bg-amber-100 dark:!bg-amber-800 !border-amber-500 dark:!border-amber-700';
-  const textColor = isSatisfied 
+  const baseTextColor = isSatisfied 
     ? '!text-green-700 dark:!text-green-200' 
     : '!text-amber-700 dark:!text-amber-200';
+
+  // Override for exemption node
+  const statusColor = isExemptionNode 
+    ? '!bg-slate-100 dark:!bg-slate-700 !border-slate-400 dark:!border-slate-500' 
+    : baseStatusColor;
+  const textColor = isExemptionNode 
+    ? '!text-slate-700 dark:!text-slate-200' 
+    : baseTextColor;
+  
   const description = data.description;
   const currentProgress = data.currentProgress; // Overall text progress (e.g., joined string)
   const listDetails = data.listProgressDetails;
   const consolidatedRules = data.consolidatedRules;
+  const classificationCourseDetails = data.classificationCourseDetails;
+  const onClassificationToggle = data.onClassificationToggle;
 
   // Check for single progress bar for non-consolidated rules
   const showSingleProgressBar = !consolidatedRules && typeof data.currentValue === 'number' && typeof data.requiredValue === 'number' && data.requiredValue > 0;
@@ -77,6 +90,51 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Display classification course checkboxes (only if not consolidated) */}
+        {!consolidatedRules && classificationCourseDetails && classificationCourseDetails.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {classificationCourseDetails.map((item) => (
+              <div key={item.id} className="flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                <div className="flex items-center">
+                  <input
+                    id={`classification-${item.id}`}
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={() => onClassificationToggle?.(item.id)}
+                    className="ml-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-indigo-600"
+                  />
+                  <label 
+                    htmlFor={`classification-${item.id}`} 
+                    className={`text-sm font-medium ${isExemptionNode && item.id === 'miluim_exemption' ? textColor : (item.checked ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300') }`}
+                  >
+                    {item.name}
+                  </label>
+                </div>
+                {item.creditInput && (
+                  <div className="flex items-center ml-4">
+                    <input
+                      type="number"
+                      id={`credits-${item.id}`}
+                      value={item.credits ?? 0} // Always show 0 if undefined or null
+                      disabled={!item.checked} // Disabled if not checked
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        data.onClassificationCreditsChange?.(item.id, isNaN(value) ? 0 : value);
+                      }}
+                      min={0}
+                      max={item.creditInput.max}
+                      step={item.creditInput.step}
+                      className={`w-20 h-8 text-sm p-1 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-200 focus:ring-indigo-500 focus:border-indigo-500 ${!item.checked ? 'disabled:opacity-50 disabled:cursor-not-allowed' : ''}`}
+                      aria-label={`Credits for ${item.name}`}
+                    />
+                    <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">נק' ({item.creditInput.max} מקס')</span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

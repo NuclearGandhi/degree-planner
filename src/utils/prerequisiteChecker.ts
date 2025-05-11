@@ -34,50 +34,61 @@ interface SAPPrerequisiteGroup {
 
 /**
  * Checks if the prerequisites for a target course are met based on semester placement.
- * @param targetCourseId The ID of the course whose prerequisites are being checked.
+ * @param targetCourseData The RawCourseData of the course whose prerequisites are being checked.
+ * @param currentSemesterNumber The 1-based number of the semester the target course is in.
  * @param templateSemesters The semester structure from the degree template.
  * @param allCoursesData Full course data list to look up prerequisites.
+ * @param classificationChecked A record indicating the checked status of classification courses.
  * @returns `true` if prerequisites are met or undefined, `false` otherwise.
  */
 export function checkPrerequisites(
-  targetCourseId: string,
+  targetCourseData: RawCourseData,
+  currentSemesterNumber: number,
   templateSemesters: Record<string, string[]>,
-  allCoursesData: RawCourseData[]
+  allCoursesData: RawCourseData[],
+  classificationChecked: Record<string, boolean>
 ): boolean {
-  const targetCourseData = allCoursesData.find(c => c._id === targetCourseId);
   if (!targetCourseData?.prereqTree) {
     if (import.meta.env.DEV) {
-      console.debug(`[checkPrerequisites] ${targetCourseId}: No prereqTree defined.`);
+      console.debug(`[checkPrerequisites] ${targetCourseData._id}: No prereqTree defined.`);
     }
     return true; // No prerequisites defined
   }
 
-  const targetSemesterIndex = getSemesterIndex(targetCourseId, templateSemesters);
-  if (targetSemesterIndex === -1) {
-    console.warn(`[checkPrerequisites] Target course ${targetCourseId} not found in semesters.`);
-    return true; // Assume ok if target placement is unclear
-  }
+  // currentSemesterNumber is 1-based, semester indices are 0-based
+  const targetSemesterIndexForComparison = currentSemesterNumber - 1;
+
   if (import.meta.env.DEV) {
-    console.debug(`[checkPrerequisites] Checking prerequisites for ${targetCourseId} (semester ${targetSemesterIndex + 1})`);
+    console.debug(`[checkPrerequisites] Checking prerequisites for ${targetCourseData._id} (in semester ${currentSemesterNumber})`);
   }
 
   // Recursive helper function
   const checkGroup = (prereq: PrerequisiteItem | PrerequisiteGroup | SAPPrerequisiteGroup): boolean => {
-    if (typeof prereq === 'string') { // Base case: simple course ID
+    if (typeof prereq === 'string') { // Base case: simple course ID (the prerequisite)
+      // Check if this prerequisite is a classification course
+      if (prereq === "01130013" || prereq === "01130014") {
+        const isChecked = classificationChecked[prereq] || false;
+        if (import.meta.env.DEV) {
+          console.debug(`  [checkPrerequisites] Classification Prereq ${prereq}: checked: ${isChecked}`);
+        }
+        return isChecked;
+      }
+
+      // Regular prerequisite course logic
       const equivalentCourses = getEquivalentCourses(prereq, allCoursesData);
       let met = false;
       
-      // Check if any equivalent course is in a valid semester
       for (const courseId of equivalentCourses) {
         const prereqSemesterIndex = getSemesterIndex(courseId, templateSemesters);
-        if (prereqSemesterIndex !== -1 && prereqSemesterIndex <= targetSemesterIndex) {
+        // Prerequisite must be in a strictly earlier semester index
+        if (prereqSemesterIndex !== -1 && prereqSemesterIndex < targetSemesterIndexForComparison) {
           met = true;
           break;
         }
       }
       
       if (import.meta.env.DEV) {
-        console.debug(`  [checkPrerequisites] Prereq ${prereq} (and equivalents): met: ${met}`);
+        console.debug(`  [checkPrerequisites] Prereq ${prereq} (and equivalents): met: ${met} (must be in semester < ${currentSemesterNumber})`);
       }
       return met;
     } else if (prereq && typeof prereq === 'object') {
@@ -128,7 +139,7 @@ export function checkPrerequisites(
 
   const result = checkGroup(targetCourseData.prereqTree);
   if (import.meta.env.DEV) {
-    console.debug(`[checkPrerequisites] Result for ${targetCourseId}: ${result}`);
+    console.debug(`[checkPrerequisites] Result for ${targetCourseData._id}: ${result}`);
   }
   return result;
 } 

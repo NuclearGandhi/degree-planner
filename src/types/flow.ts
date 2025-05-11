@@ -42,6 +42,17 @@ export interface RuleNodeData {
     requiredValue?: number | null; // Required value for this sub-rule
   }> | null;
 
+  // Details for 'classification_courses' rule type
+  classificationCourseDetails?: Array<{
+    id: string;
+    name: string;
+    checked: boolean;
+    credits?: number; // Added for exemption credits
+    creditInput?: { max: number; step: number; }; // Added for input configuration
+  }> | null;
+  onClassificationToggle?: (courseId: string) => void;
+  onClassificationCreditsChange?: (courseId: string, credits: number) => void; // Added handler for credit changes
+
   onEditRule?: (id: string) => void; // Retain for potential editing of the rule group or specific rules
   onDeleteRule?: (id: string) => void; // Retain for potential deletion
   [key: string]: unknown;

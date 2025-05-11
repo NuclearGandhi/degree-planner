@@ -238,7 +238,8 @@ def main():
             "notes": None,
             "exam_a": None,
             "exam_b": None,
-            "quiz_a": None
+            "quiz_a": None,
+            "isClassificationCourse": True
         }
 
         # Add the second special course
@@ -256,7 +257,8 @@ def main():
             "notes": None,
             "exam_a": None,
             "exam_b": None,
-            "quiz_a": None
+            "quiz_a": None,
+            "isClassificationCourse": True
         }
         
         # Save the merged map

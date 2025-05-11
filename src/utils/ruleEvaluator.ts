@@ -25,7 +25,10 @@ export function evaluateRule(
   allCoursesData: RawCourseData[], // All available course data (for looking up details of courses in lists)
   templateSemesters: Record<string, string[]>, // Mandatory courses from template (CURRENTLY LIVE SEMESTERS, used by other rules perhaps)
   degreeCourseLists?: Record<string, string[] | number[]>, // Adjusted type
-  initialTemplateMandatoryCourseIds?: string[] // NEW: IDs from the original template's semester definition
+  initialTemplateMandatoryCourseIds?: string[], // NEW: IDs from the original template's semester definition
+  // New optional parameters for classification/exemption credits
+  classificationChecked?: Record<string, boolean>,
+  classificationCredits?: Record<string, number>
 ): EvaluatedRuleStatus {
   let currentProgressString = "N/A";
   let isSatisfied = false;
@@ -44,9 +47,32 @@ export function evaluateRule(
   switch (rule.type) {
     case 'total_credits':
       if (rule.required_credits !== undefined) {
-        const currentCredits = coursesInPlan.reduce((sum, course) => sum + course.credits, 0);
+        let currentCredits = coursesInPlan.reduce((sum, course) => sum + Number(course.credits || 0), 0);
+        
+        // if (import.meta.env.DEV) { // Temporarily bypass DEV check
+          console.log('[evaluateRule] total_credits - initial sum:', currentCredits, 'type:', typeof currentCredits);
+          console.log('[evaluateRule] total_credits - classificationChecked:', classificationChecked);
+          console.log('[evaluateRule] total_credits - classificationCredits:', classificationCredits);
+        // }
+
+        // Add credits from Miluim exemption if checked and defined
+        if (classificationChecked && classificationChecked['miluim_exemption'] && classificationCredits && typeof classificationCredits['miluim_exemption'] === 'number') {
+          currentCredits += classificationCredits['miluim_exemption'];
+          // if (import.meta.env.DEV) { // Temporarily bypass DEV check
+            console.log('[evaluateRule] total_credits - after adding miluim:', currentCredits, '(added:', classificationCredits['miluim_exemption'], ')');
+          // }
+        } else if (classificationChecked && classificationChecked['miluim_exemption']) { // Temporarily bypass DEV check for this log too
+          console.log('[evaluateRule] total_credits - miluim checked but credits not a number or undefined:', classificationCredits ? classificationCredits['miluim_exemption'] : 'undefined');
+        }
+
         currentValue = currentCredits;
         requiredValue = rule.required_credits;
+
+        // if (import.meta.env.DEV) { // Temporarily bypass DEV check
+          console.log('[evaluateRule] total_credits - final currentValue:', currentValue, 'type:', typeof currentValue);
+          console.log('[evaluateRule] total_credits - final requiredValue:', requiredValue, 'type:', typeof requiredValue);
+        // }
+
         currentProgressString = `${currentValue}/${requiredValue} נק"ז`;
         isSatisfied = currentValue >= requiredValue;
       }

@@ -22,6 +22,7 @@ export interface RawCourseData {
   exam_a?: string;
   exam_b?: string;
   prerequisites?: string;
+  isClassificationCourse?: boolean; // Added for classification courses
   [key: string]: unknown; // Changed to unknown
 }
 
@@ -42,7 +43,7 @@ export interface CourseListRule {
 export interface DegreeRule {
   id: string;
   description: string;
-  type: 'total_credits' | 'credits_from_list' | 'min_grade' | 'minCredits' | 'minCoursesFromList' | 'minCoursesFromMultipleLists' | 'minCreditsFromMandatory' | 'minCreditsFromAnySelectiveList' | string;
+  type: 'total_credits' | 'credits_from_list' | 'min_grade' | 'minCredits' | 'minCoursesFromList' | 'minCoursesFromMultipleLists' | 'minCreditsFromMandatory' | 'minCreditsFromAnySelectiveList' | 'classification_courses' | string;
   required_credits?: number;
   course_list_name?: string;
   listName?: string;
@@ -50,6 +51,11 @@ export interface DegreeRule {
   min_grade_value?: number;
   courses_for_min_grade?: string[];
   min?: number;
+  courses?: Array<{ 
+    id: string; 
+    name: string; 
+    creditInput?: { max: number; step: number; }; // Added for exemption credit input
+  }>; // For the new classification_courses rule type
 }
 
 // Represents a degree template from degrees.json
@@ -67,7 +73,8 @@ export interface DegreeTemplate {
 }
 
 export interface DegreesFileStructure {
-  [degreeId: string]: DegreeTemplate;
+  globalRules?: DegreeRule[]; // Optional array of global rules
+  [degreeId: string]: DegreeTemplate | DegreeRule[] | undefined; // Allow DegreeRule[] for globalRules
 }
 
 export type MergedCoursesFileStructure = RawCourseData[]; 
