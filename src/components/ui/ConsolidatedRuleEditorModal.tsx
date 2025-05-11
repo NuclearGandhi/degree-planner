@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { DegreeRule } from '../../types/data';
 import BaseModal from './BaseModal';
+import CustomNumberInput from './CustomNumberInput';
 
 interface EditableRuleState {
-  id: string; // Original rule ID
+  id: string;
   type: DegreeRule['type'];
   description: string;
-  // Store numeric values as string to handle empty input, convert to number on save
-  numericValue: string | undefined; 
+  numericValue: string | number;
 }
 
 interface ConsolidatedRuleEditorModalProps {
@@ -15,7 +15,6 @@ interface ConsolidatedRuleEditorModalProps {
   rules: DegreeRule[];
   onClose: () => void;
   onSave: (updatedRules: DegreeRule[]) => void;
-  // availableCourseListNames: string[]; // Might be needed if list rules are part of consolidated
 }
 
 const ConsolidatedRuleEditorModal: React.FC<ConsolidatedRuleEditorModalProps> = ({
@@ -23,7 +22,6 @@ const ConsolidatedRuleEditorModal: React.FC<ConsolidatedRuleEditorModalProps> = 
   rules,
   onClose,
   onSave,
-  // availableCourseListNames,
 }) => {
   const [editableRules, setEditableRules] = useState<EditableRuleState[]>([]);
 
@@ -38,27 +36,26 @@ const ConsolidatedRuleEditorModal: React.FC<ConsolidatedRuleEditorModalProps> = 
         else if (rule.type === 'minCoursesFromList') numValue = rule.min;
         else if (rule.type === 'minCreditsFromMandatory') numValue = rule.min;
         else if (rule.type === 'minCreditsFromAnySelectiveList') numValue = rule.min;
-        // Add other types if they become editable in consolidated view
 
         return {
           id: rule.id,
           type: rule.type,
           description: rule.description || '',
-          numericValue: numValue !== undefined ? String(numValue) : undefined,
+          numericValue: numValue !== undefined ? numValue : '',
         };
       });
       setEditableRules(initialEditableStates);
     }
   }, [rules, isOpen]);
 
-  const handleValueChange = (ruleId: string, value: string) => {
+  const handleValueChange = (ruleId: string, value: string | number) => {
     setEditableRules(prev =>
       prev.map(rule =>
         rule.id === ruleId ? { ...rule, numericValue: value } : rule
       )
     );
   };
-  
+
   const handleDescriptionChange = (ruleId: string, newDescription: string) => {
     setEditableRules(prev =>
       prev.map(rule =>
@@ -69,42 +66,45 @@ const ConsolidatedRuleEditorModal: React.FC<ConsolidatedRuleEditorModalProps> = 
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    const updatedRules: DegreeRule[] = editableRules.map(editableRule => {
+    const updatedRulesData = editableRules.map(editableRule => {
       const originalRule = rules.find(r => r.id === editableRule.id);
       if (!originalRule) {
         console.error(`Original rule not found for ID: ${editableRule.id}`);
-        return null; 
+        return null;
       }
 
-      const updatedRule: DegreeRule = { 
-        ...originalRule, 
-        description: editableRule.description 
+      const updatedRule: DegreeRule = {
+        ...originalRule,
+        description: editableRule.description,
       };
-      
-      const numericValue = editableRule.numericValue !== undefined && editableRule.numericValue.trim() !== '' 
-        ? parseInt(editableRule.numericValue, 10) 
-        : undefined;
 
-      // Clear potentially irrelevant fields before setting new ones based on type
+      let finalNumericValue: number | undefined = undefined;
+      if (editableRule.numericValue === '') {
+        finalNumericValue = undefined;
+      } else {
+        const parsed = parseFloat(String(editableRule.numericValue));
+        if (!isNaN(parsed)) {
+          finalNumericValue = parsed;
+        }
+      }
+
       delete updatedRule.required_credits;
       delete updatedRule.min;
       delete updatedRule.min_grade_value;
-      // For list rules, if they were part of this, we might need to preserve course_list_name
-      // delete updatedRule.course_list_name; 
-      
-      if (numericValue !== undefined) {
-        if (editableRule.type === 'total_credits') updatedRule.required_credits = numericValue;
-        else if (editableRule.type === 'minCredits') updatedRule.min = numericValue;
-        else if (editableRule.type === 'min_grade') updatedRule.min_grade_value = numericValue;
-        else if (editableRule.type === 'credits_from_list') updatedRule.required_credits = numericValue;
-        else if (editableRule.type === 'minCoursesFromList') updatedRule.min = numericValue;
-        else if (editableRule.type === 'minCreditsFromMandatory') updatedRule.min = numericValue;
-        else if (editableRule.type === 'minCreditsFromAnySelectiveList') updatedRule.min = numericValue;
+
+      if (finalNumericValue !== undefined) {
+        if (editableRule.type === 'total_credits') updatedRule.required_credits = finalNumericValue;
+        else if (editableRule.type === 'minCredits') updatedRule.min = finalNumericValue;
+        else if (editableRule.type === 'min_grade') updatedRule.min_grade_value = finalNumericValue;
+        else if (editableRule.type === 'credits_from_list') updatedRule.required_credits = finalNumericValue;
+        else if (editableRule.type === 'minCoursesFromList') updatedRule.min = finalNumericValue;
+        else if (editableRule.type === 'minCreditsFromMandatory') updatedRule.min = finalNumericValue;
+        else if (editableRule.type === 'minCreditsFromAnySelectiveList') updatedRule.min = finalNumericValue;
       }
       return updatedRule;
-    }).filter(Boolean) as DegreeRule[]; // Filter out any nulls
+    }).filter(Boolean) as DegreeRule[];
 
-    onSave(updatedRules);
+    onSave(updatedRulesData);
   };
 
   const commonInputClass = "mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900 dark:text-slate-50";
@@ -116,7 +116,7 @@ const ConsolidatedRuleEditorModal: React.FC<ConsolidatedRuleEditorModalProps> = 
       case 'minCredits':
       case 'minCreditsFromMandatory':
       case 'minCreditsFromAnySelectiveList':
-        return 'ערך נדרש (נק\\"ז)';
+        return 'ערך נדרש (נק"ז)';
       case 'min_grade':
         return 'ציון מינימלי';
       case 'minCoursesFromList':
@@ -125,72 +125,79 @@ const ConsolidatedRuleEditorModal: React.FC<ConsolidatedRuleEditorModalProps> = 
         return 'ערך נדרש';
     }
   };
-  
-  // Only allow editing of rules that have a numeric value field
+
   const editableRuleTypes: Array<DegreeRule['type']> = [
-    'total_credits', 
-    'minCredits', 
-    'min_grade', 
-    'credits_from_list', 
+    'total_credits',
+    'minCredits',
+    'min_grade',
+    'credits_from_list',
     'minCoursesFromList',
     'minCreditsFromMandatory',
     'minCreditsFromAnySelectiveList'
   ];
 
   return (
-    <BaseModal 
-      isOpen={isOpen} 
-      onClose={onClose} 
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
       title="עריכת כללי התקדמות מאוחדים"
-      maxWidth="max-w-xl" // Slightly wider for multiple rules
+      maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit}>
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto p-1">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto p-1">
           {editableRules.map((rule) => {
             const isEditable = editableRuleTypes.includes(rule.type);
             return (
               <div key={rule.id} className="p-3 border border-slate-200 dark:border-slate-700 rounded-md">
                 <div className="mb-2">
-                  <label htmlFor={`ruleDesc-${rule.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">תיאור הכלל</label>
+                  <label htmlFor={`ruleDesc-${rule.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    תיאור הכלל:
+                  </label>
                   <input
                     type="text"
                     id={`ruleDesc-${rule.id}`}
                     value={rule.description}
                     onChange={(e) => handleDescriptionChange(rule.id, e.target.value)}
-                    className={commonInputClass}
+                    className={`${commonInputClass} text-sm`}
                     required
                   />
                 </div>
 
                 {isEditable && (
-                  <div className="mb-2">
-                    <label 
-                      htmlFor={`ruleValue-${rule.id}`} 
-                      className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                  <div className="flex items-center justify-between gap-x-3">
+                    <label
+                      htmlFor={`ruleValue-${rule.id}`}
+                      className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap"
                     >
-                      {getNumericInputLabel(rule.type)}
+                      {getNumericInputLabel(rule.type)}:
                     </label>
-                    <input
-                      type="number"
-                      id={`ruleValue-${rule.id}`}
-                      value={rule.numericValue ?? ''}
-                      onChange={(e) => handleValueChange(rule.id, e.target.value)}
-                      className={commonInputClass}
-                      min="0"
-                      // Consider adding max for grade if type is 'min_grade'
-                      max={rule.type === 'min_grade' ? "100" : undefined}
-                    />
+                    <div className="flex-grow max-w-[150px]">
+                      <CustomNumberInput
+                        id={`ruleValue-${rule.id}`}
+                        value={rule.numericValue}
+                        onChange={(val) => handleValueChange(rule.id, val)}
+                        className="w-full h-9"
+                        inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim() + ' h-full text-sm'}
+                        buttonClassName="h-full text-sm"
+                        min={0}
+                        step={
+                          rule.type === 'min_grade' || rule.type === 'minCoursesFromList'
+                            ? 1
+                            : 0.5
+                        }
+                        max={rule.type === 'min_grade' ? 100 : undefined}
+                      />
+                    </div>
                   </div>
                 )}
-                {/* Add other specific fields if necessary, e.g., for list selection if list rules are consolidated */}
                 {!isEditable && (
-                   <p className="text-sm text-slate-500 dark:text-slate-400">לא ניתן לערוך פרמטרים עבור סוג כלל זה דרך ממשק זה.</p>
+                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">לא ניתן לערוך פרמטרים עבור סוג כלל זה.</p>
                 )}
               </div>
             );
           })}
         </div>
-        
+
         <div className="flex justify-end gap-x-2 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
           <button
             type="button"

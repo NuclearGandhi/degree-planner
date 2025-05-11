@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NodeProps, Node as RFNode } from '@xyflow/react'; // No Handles needed for rule nodes if they are informational
 import { RuleNodeData } from '../../../types/flow'; // Adjusted import path, removed RuleNodeData import
+import CustomNumberInput from '../../ui/CustomNumberInput'; // Added import
 
 // New sub-component for each classification item row
 interface ClassificationItemRowProps {
@@ -24,6 +25,37 @@ const ClassificationItemRow: React.FC<ClassificationItemRowProps> = ({
     setLocalCredits(item.credits ?? 0);
   }, [item.credits]);
 
+  // New handler for CustomNumberInput
+  const handleCreditsInputChange = (newValue: number | string) => {
+    setLocalCredits(newValue); // Update local state immediately for responsiveness
+
+    let numericValueToPropagate: number;
+    if (typeof newValue === 'string') {
+      if (newValue === '') {
+        numericValueToPropagate = 0; // Or handle as undefined/error if empty is not allowed
+      } else {
+        numericValueToPropagate = parseFloat(newValue);
+        if (isNaN(numericValueToPropagate)) {
+          numericValueToPropagate = 0; // Default if somehow unparseable despite CustomInput's checks
+        }
+      }
+    } else {
+      numericValueToPropagate = newValue;
+    }
+
+    // Clamp and ensure it's a valid number before propagating
+    numericValueToPropagate = Math.max(0, numericValueToPropagate);
+    if (item.creditInput?.max !== undefined) {
+      numericValueToPropagate = Math.min(item.creditInput.max, numericValueToPropagate);
+    }
+
+    // Only call the callback if the value results in a change
+    // (item.credits is the original prop value, numericValueToPropagate is the processed new value)
+    if (numericValueToPropagate !== item.credits) {
+        onClassificationCreditsChange?.(item.id, numericValueToPropagate);
+    }
+  };
+
   return (
     <div key={item.id} className="flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
       <div className="flex items-center">
@@ -43,44 +75,20 @@ const ClassificationItemRow: React.FC<ClassificationItemRowProps> = ({
       </div>
       {item.creditInput && (
         <div className="flex items-center ml-4">
-          <input
-            type="number"
+          <CustomNumberInput
             id={`credits-${item.id}`}
             value={localCredits}
-            disabled={!item.checked}
-            onChange={(e) => {
-              const rawValue = e.target.value;
-              setLocalCredits(rawValue);
-
-              const valueAsNum = e.target.valueAsNumber;
-              let numericValue = isNaN(valueAsNum) ? (rawValue === '' ? 0 : parseFloat(rawValue)) : valueAsNum;
-              numericValue = isNaN(numericValue) ? 0 : numericValue;
-              
-              numericValue = Math.max(0, numericValue);
-              if (item.creditInput?.max !== undefined) {
-                numericValue = Math.min(item.creditInput.max, numericValue);
-              }
-              // Only call the callback if the value has actually changed from the prop
-              if (numericValue !== item.credits) {
-                onClassificationCreditsChange?.(item.id, numericValue);
-              }
-            }}
-            onBlur={(e) => {
-              const valueAsNumOnBlur = parseFloat(e.target.value);
-              let finalNumericValue = isNaN(valueAsNumOnBlur) ? 0 : valueAsNumOnBlur;
-              finalNumericValue = Math.max(0, finalNumericValue);
-              if (item.creditInput?.max !== undefined) {
-                finalNumericValue = Math.min(item.creditInput.max, finalNumericValue);
-              }
-              setLocalCredits(finalNumericValue);
-            }}
+            onChange={handleCreditsInputChange}
             min={0}
             max={item.creditInput.max}
             step={item.creditInput.step}
-            className={`w-20 h-8 text-sm p-1 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-200 focus:ring-indigo-500 focus:border-indigo-500 ${!item.checked ? 'disabled:opacity-50 disabled:cursor-not-allowed' : ''}`}
-            aria-label={`Credits for ${item.name}`}
+            disabled={!item.checked}
+            className={`w-28 h-8 ${!item.checked ? 'opacity-50 cursor-not-allowed' : ''}`}
+            inputClassName="text-sm p-1"
+            buttonClassName="text-sm"
+            placeholder="נק" 
           />
-          <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">נק' ({item.creditInput.max} מקס')</span>
+          <span className="mr-1 text-xs text-gray-500 dark:text-gray-400">{`נק' (${item.creditInput.max} מקס')`}</span>
         </div>
       )}
     </div>

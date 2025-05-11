@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 // import { DegreeRule, RawCourseData } from '../../types/data'; // RawCourseData removed
 import { DegreeRule } from '../../types/data';
 import BaseModal from './BaseModal';
+import CustomNumberInput from './CustomNumberInput';
 
 // For minCoursesFromMultipleLists items during editing
 interface EditableListItem {
@@ -26,56 +27,55 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
   availableCourseListNames 
 }) => {
   const [description, setDescription] = useState('');
-  // State for 'total_credits' or 'minCredits'
-  const [generalRequiredCredits, setGeneralRequiredCredits] = useState<number | undefined>(undefined);
-  // State for 'min_grade'
-  const [minGradeValue, setMinGradeValue] = useState<number | undefined>(undefined);
-  // State for 'credits_from_list' or 'minCoursesFromList'
+  const [generalRequiredCredits, setGeneralRequiredCredits] = useState<string | number>('');
+  const [minGradeValue, setMinGradeValue] = useState<string | number>('');
   const [selectedCourseListName, setSelectedCourseListName] = useState<string>('');
-  const [listRuleNumericValue, setListRuleNumericValue] = useState<number | undefined>(undefined);
-  // State for 'minCoursesFromMultipleLists' items
+  const [listRuleNumericValue, setListRuleNumericValue] = useState<string | number>('');
   const [multiListItems, setMultiListItems] = useState<EditableListItem[]>([]);
 
   useEffect(() => {
     if (rule) {
       setDescription(rule.description || '');
-      
-      // Reset all specific fields first
-      setGeneralRequiredCredits(undefined);
-      setMinGradeValue(undefined);
+      setGeneralRequiredCredits(rule.required_credits ?? rule.min ?? '');
+      setMinGradeValue(rule.min_grade_value ?? '');
       setSelectedCourseListName(availableCourseListNames.length > 0 ? availableCourseListNames[0] : '');
-      setListRuleNumericValue(undefined);
-      setMultiListItems([]); // Reset multi-list items
+      
+      let initialListNumericValue: string | number = '';
+      if (rule.type === 'credits_from_list') {
+        initialListNumericValue = rule.required_credits ?? '';
+      } else if (rule.type === 'minCoursesFromList') {
+        initialListNumericValue = rule.min ?? '';
+      }
+      setListRuleNumericValue(initialListNumericValue);
+      
+      setMultiListItems([]); 
 
       if (rule.type === 'total_credits' || rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList') {
-        setGeneralRequiredCredits(rule.required_credits ?? rule.min ?? undefined);
+        setGeneralRequiredCredits(rule.required_credits ?? rule.min ?? '');
       } else if (rule.type === 'min_grade') {
-        setMinGradeValue(rule.min_grade_value ?? undefined);
+        setMinGradeValue(rule.min_grade_value ?? '');
       } else if (rule.type === 'credits_from_list') {
         setSelectedCourseListName(rule.course_list_name || (availableCourseListNames.length > 0 ? availableCourseListNames[0] : ''));
-        setListRuleNumericValue(rule.required_credits ?? undefined);
+        setListRuleNumericValue(rule.required_credits ?? '');
       } else if (rule.type === 'minCoursesFromList') {
         setSelectedCourseListName(rule.course_list_name || (availableCourseListNames.length > 0 ? availableCourseListNames[0] : ''));
-        setListRuleNumericValue(rule.min ?? undefined);
+        setListRuleNumericValue(rule.min ?? '');
       } else if (rule.type === 'minCoursesFromMultipleLists') {
         const initialMultiListItems = (rule.lists || []).map((item, index) => ({
           ...item,
-          id: `item-${Date.now()}-${index}` // Ensure a unique ID for each item for stable keys
+          id: `item-${Date.now()}-${index}` 
         }));
         setMultiListItems(initialMultiListItems);
       }
-      // TODO: Add handling for 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList' if they have distinct editable params
-
     } else {
-      // Reset all fields if rule is null
       setDescription('');
-      setGeneralRequiredCredits(undefined);
-      setMinGradeValue(undefined);
+      setGeneralRequiredCredits('');
+      setMinGradeValue('');
       setSelectedCourseListName(availableCourseListNames.length > 0 ? availableCourseListNames[0] : '');
-      setListRuleNumericValue(undefined);
+      setListRuleNumericValue('');
       setMultiListItems([]);
     }
-  }, [rule, availableCourseListNames]);
+  }, [rule, availableCourseListNames, isOpen]);
 
   if (!rule) {
     if (isOpen) console.warn("RuleEditorModal: rule is null while modal is open.");
@@ -91,7 +91,13 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
       description,
     };
 
-    // Clear potentially irrelevant fields before setting new ones based on type
+    // Helper to parse state values (string | number) to number | undefined
+    const parseNumericState = (value: string | number): number | undefined => {
+      if (value === '') return undefined;
+      const num = parseFloat(String(value));
+      return isNaN(num) ? undefined : num;
+    };
+
     delete updatedRule.required_credits;
     delete updatedRule.min;
     delete updatedRule.min_grade_value;
@@ -99,17 +105,17 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
     delete updatedRule.lists; // Clear lists before potentially re-adding
 
     if (rule.type === 'total_credits') {
-      updatedRule.required_credits = generalRequiredCredits;
+      updatedRule.required_credits = parseNumericState(generalRequiredCredits);
     } else if (rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList') {
-      updatedRule.min = generalRequiredCredits;
+      updatedRule.min = parseNumericState(generalRequiredCredits);
     } else if (rule.type === 'min_grade') {
-      updatedRule.min_grade_value = minGradeValue;
+      updatedRule.min_grade_value = parseNumericState(minGradeValue);
     } else if (rule.type === 'credits_from_list') {
       updatedRule.course_list_name = selectedCourseListName;
-      updatedRule.required_credits = listRuleNumericValue;
+      updatedRule.required_credits = parseNumericState(listRuleNumericValue);
     } else if (rule.type === 'minCoursesFromList') {
       updatedRule.course_list_name = selectedCourseListName;
-      updatedRule.min = listRuleNumericValue;
+      updatedRule.min = parseNumericState(listRuleNumericValue);
     } else if (rule.type === 'minCoursesFromMultipleLists') {
       // Convert EditableListItem back to the format expected by DegreeRule, removing temporary id
       updatedRule.lists = multiListItems.map(({ /* id, */ ...rest }) => rest);
@@ -141,7 +147,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
 
   const handleMultiListItemChange = (id: string, field: 'listName' | 'min', value: string | number) => {
     setMultiListItems(prev => prev.map(item => 
-      item.id === id ? { ...item, [field]: field === 'min' ? (Number(value) || 0) : value } : item
+      item.id === id ? { ...item, [field]: field === 'min' ? (value === '' ? 0 : parseFloat(String(value)) || 0) : String(value) } : item
     ));
   };
 
@@ -174,13 +180,14 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
             <label htmlFor="ruleNumericValueGeneral" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               ערך נדרש (נק"ז)
             </label>
-            <input
-              type="number"
+            <CustomNumberInput
               id="ruleNumericValueGeneral"
-              value={generalRequiredCredits ?? ''}
-              onChange={(e) => setGeneralRequiredCredits(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              className={commonInputClass}
-              min="0"
+              value={generalRequiredCredits}
+              onChange={setGeneralRequiredCredits}
+              className="w-full"
+              inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+              min={0}
+              step={0.5}
             />
           </div>
         )}
@@ -188,14 +195,15 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
         {rule.type === 'min_grade' && (
           <div className="mb-4">
             <label htmlFor="minGradeValue" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">ציון מינימלי</label>
-            <input
-              type="number"
+            <CustomNumberInput
               id="minGradeValue"
-              value={minGradeValue ?? ''}
-              onChange={(e) => setMinGradeValue(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              className={commonInputClass}
-              min="0"
-              max="100"
+              value={minGradeValue}
+              onChange={setMinGradeValue}
+              className="w-full"
+              inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+              min={0}
+              max={100}
+              step={1}
             />
           </div>
         )}
@@ -223,13 +231,14 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
               <label htmlFor="ruleNumericValueList" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mt-2">
                 {rule.type === 'credits_from_list' ? 'נק"ז נדרשות מהרשימה' : 'מספר קורסים נדרש מהרשימה'}
               </label>
-              <input
-                type="number"
+              <CustomNumberInput
                 id="ruleNumericValueList"
-                value={listRuleNumericValue ?? ''}
-                onChange={(e) => setListRuleNumericValue(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                className={commonInputClass}
-                min="0"
+                value={listRuleNumericValue}
+                onChange={setListRuleNumericValue}
+                className="w-full"
+                inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+                min={0}
+                step={rule.type === 'credits_from_list' ? 0.5 : 1}
               />
             </div>
           </>
@@ -251,9 +260,11 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
               );
 
               return (
-                <div key={item.id} className="flex items-center space-x-2 space-x-reverse p-2 border border-slate-200 dark:border-slate-700 rounded-md">
-                  <div className="flex-grow">
-                    <label htmlFor={`multiListSelect-${item.id}`} className="sr-only">רשימה</label>
+                <div key={item.id} className="p-3 border border-slate-200 dark:border-slate-600 rounded-md space-y-2">
+                  <div>
+                    <label htmlFor={`multiListSelect-${item.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      בחר רשימה
+                    </label>
                     <select 
                       id={`multiListSelect-${item.id}`}
                       value={item.listName}
@@ -266,15 +277,19 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
                         <option key={name} value={name}>{name}</option>
                       ))}
                     </select>
-                    <label htmlFor={`multiListMin-${item.id}`} className="sr-only">מינימום</label>
-                    <input 
-                      type="number" 
+                  </div>
+                  <div>
+                    <label htmlFor={`multiListMin-${item.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      מספר קורסים מינימלי מהרשימה
+                    </label>
+                    <CustomNumberInput
                       id={`multiListMin-${item.id}`}
                       value={item.min}
-                      onChange={(e) => handleMultiListItemChange(item.id, 'min', e.target.value)}
-                      className={commonInputClass}
-                      min="0"
-                      placeholder="מינימום קורסים"
+                      onChange={(val) => handleMultiListItemChange(item.id, 'min', val)}
+                      className="w-full"
+                      inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+                      min={0}
+                      step={1}
                     />
                   </div>
                   <button 
