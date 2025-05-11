@@ -465,6 +465,7 @@ function DegreePlanView() {
   // Moved isLoading, setIsLoading, and autosaveTimeoutRef to the top with other hooks
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const autosaveTimeoutRef = useRef<number | null>(null);
+  const classificationCreditsDebounceTimeoutRef = useRef<number | null>(null); // Ref for debounce timeout
 
   // NEW STATE and HANDLER for classification checkboxes
   const [classificationChecked, setClassificationChecked] = useState<Record<string, boolean>>(initialClassificationCheckedState);
@@ -482,7 +483,15 @@ function DegreePlanView() {
   }, []);
 
   const handleClassificationCreditsChange = useCallback((courseId: string, credits: number) => {
-    setClassificationCredits(prev => ({ ...prev, [courseId]: credits }));
+    // Clear any existing timeout to reset the debounce timer
+    if (classificationCreditsDebounceTimeoutRef.current) {
+      clearTimeout(classificationCreditsDebounceTimeoutRef.current);
+    }
+
+    // Set a new timeout to update the state after a delay
+    classificationCreditsDebounceTimeoutRef.current = window.setTimeout(() => {
+      setClassificationCredits(prev => ({ ...prev, [courseId]: credits }));
+    }, 400); // 400ms debounce delay
   }, []);
 
   // Derived state for courses in plan to pass to modal

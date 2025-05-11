@@ -1,6 +1,91 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NodeProps, Node as RFNode } from '@xyflow/react'; // No Handles needed for rule nodes if they are informational
 import { RuleNodeData } from '../../../types/flow'; // Adjusted import path, removed RuleNodeData import
+
+// New sub-component for each classification item row
+interface ClassificationItemRowProps {
+  item: NonNullable<RuleNodeData['classificationCourseDetails']>[number];
+  isExemptionNode: boolean; // To pass down for styling or specific logic if needed
+  textColor: string; // For label styling
+  onClassificationToggle?: (courseId: string) => void;
+  onClassificationCreditsChange?: (courseId: string, credits: number) => void;
+}
+
+const ClassificationItemRow: React.FC<ClassificationItemRowProps> = ({
+  item,
+  isExemptionNode,
+  textColor,
+  onClassificationToggle,
+  onClassificationCreditsChange,
+}) => {
+  const [localCredits, setLocalCredits] = useState<number | string>(item.credits ?? 0);
+
+  useEffect(() => {
+    setLocalCredits(item.credits ?? 0);
+  }, [item.credits]);
+
+  return (
+    <div key={item.id} className="flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+      <div className="flex items-center">
+        <input
+          id={`classification-${item.id}`}
+          type="checkbox"
+          checked={item.checked}
+          onChange={() => onClassificationToggle?.(item.id)}
+          className="ml-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-indigo-600"
+        />
+        <label
+          htmlFor={`classification-${item.id}`}
+          className={`text-sm font-medium ${isExemptionNode && item.id === 'miluim_exemption' ? textColor : (item.checked ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300') }`}
+        >
+          {item.name}
+        </label>
+      </div>
+      {item.creditInput && (
+        <div className="flex items-center ml-4">
+          <input
+            type="number"
+            id={`credits-${item.id}`}
+            value={localCredits}
+            disabled={!item.checked}
+            onChange={(e) => {
+              const rawValue = e.target.value;
+              setLocalCredits(rawValue);
+
+              const valueAsNum = e.target.valueAsNumber;
+              let numericValue = isNaN(valueAsNum) ? (rawValue === '' ? 0 : parseFloat(rawValue)) : valueAsNum;
+              numericValue = isNaN(numericValue) ? 0 : numericValue;
+              
+              numericValue = Math.max(0, numericValue);
+              if (item.creditInput?.max !== undefined) {
+                numericValue = Math.min(item.creditInput.max, numericValue);
+              }
+              // Only call the callback if the value has actually changed from the prop
+              if (numericValue !== item.credits) {
+                onClassificationCreditsChange?.(item.id, numericValue);
+              }
+            }}
+            onBlur={(e) => {
+              const valueAsNumOnBlur = parseFloat(e.target.value);
+              let finalNumericValue = isNaN(valueAsNumOnBlur) ? 0 : valueAsNumOnBlur;
+              finalNumericValue = Math.max(0, finalNumericValue);
+              if (item.creditInput?.max !== undefined) {
+                finalNumericValue = Math.min(item.creditInput.max, finalNumericValue);
+              }
+              setLocalCredits(finalNumericValue);
+            }}
+            min={0}
+            max={item.creditInput.max}
+            step={item.creditInput.step}
+            className={`w-20 h-8 text-sm p-1 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-200 focus:ring-indigo-500 focus:border-indigo-500 ${!item.checked ? 'disabled:opacity-50 disabled:cursor-not-allowed' : ''}`}
+            aria-label={`Credits for ${item.name}`}
+          />
+          <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">נק' ({item.creditInput.max} מקס')</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) => {
   const isExemptionNode = data.id === 'classification_courses_rule'; // Check if it's the exemptions node
@@ -27,6 +112,7 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
   const consolidatedRules = data.consolidatedRules;
   const classificationCourseDetails = data.classificationCourseDetails;
   const onClassificationToggle = data.onClassificationToggle;
+  const onClassificationCreditsChange = data.onClassificationCreditsChange; // Pass this down
 
   // Check for single progress bar for non-consolidated rules
   const showSingleProgressBar = !consolidatedRules && typeof data.currentValue === 'number' && typeof data.requiredValue === 'number' && data.requiredValue > 0;
@@ -97,43 +183,14 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
         {!consolidatedRules && classificationCourseDetails && classificationCourseDetails.length > 0 && (
           <div className="mt-2 space-y-1.5">
             {classificationCourseDetails.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                <div className="flex items-center">
-                  <input
-                    id={`classification-${item.id}`}
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={() => onClassificationToggle?.(item.id)}
-                    className="ml-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-indigo-600"
-                  />
-                  <label 
-                    htmlFor={`classification-${item.id}`} 
-                    className={`text-sm font-medium ${isExemptionNode && item.id === 'miluim_exemption' ? textColor : (item.checked ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300') }`}
-                  >
-                    {item.name}
-                  </label>
-                </div>
-                {item.creditInput && (
-                  <div className="flex items-center ml-4">
-                    <input
-                      type="number"
-                      id={`credits-${item.id}`}
-                      value={item.credits ?? 0} // Always show 0 if undefined or null
-                      disabled={!item.checked} // Disabled if not checked
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value);
-                        data.onClassificationCreditsChange?.(item.id, isNaN(value) ? 0 : value);
-                      }}
-                      min={0}
-                      max={item.creditInput.max}
-                      step={item.creditInput.step}
-                      className={`w-20 h-8 text-sm p-1 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-200 focus:ring-indigo-500 focus:border-indigo-500 ${!item.checked ? 'disabled:opacity-50 disabled:cursor-not-allowed' : ''}`}
-                      aria-label={`Credits for ${item.name}`}
-                    />
-                    <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">נק' ({item.creditInput.max} מקס')</span>
-                  </div>
-                )}
-              </div>
+              <ClassificationItemRow
+                key={item.id} // Ensure key is on the component instance
+                item={item}
+                isExemptionNode={isExemptionNode}
+                textColor={textColor}
+                onClassificationToggle={onClassificationToggle}
+                onClassificationCreditsChange={onClassificationCreditsChange}
+              />
             ))}
           </div>
         )}
