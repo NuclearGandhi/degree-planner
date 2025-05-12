@@ -7,11 +7,13 @@ import { Node as RFNode, Edge as RFEdge, NodeChange, EdgeChange } from '@xyflow/
 export interface CourseNodeData {
   label: string;
   courseId: string;
-  credits: number;
+  credits: number | string; // Allow string for initial data, convert to number for calcs
   grade?: string;
   onGradeChange?: (courseId: string, grade: string) => void;
   onRemoveCourse?: (courseId: string) => void;
-  prerequisitesMet?: boolean;
+  prerequisitesMet?: boolean | null; // null for not yet calculated, true/false for status
+  isBinary?: boolean; // New field for binary/pass-fail status
+  onBinaryChange?: (courseId: string, isBinary: boolean) => void; // New callback
   onDoubleClick?: (courseId: string) => void;
   [key: string]: unknown;
 }

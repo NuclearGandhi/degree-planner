@@ -13,30 +13,51 @@ export const AveragesDisplay: React.FC<AveragesDisplayProps> = ({
   allCourses,
   grades,
 }) => {
-  const { overallAverage /*, semesterAverages */ } = useMemo(() => {
+  const { overallAverage, semesterCalculations } = useMemo(() => {
     if (!Array.isArray(allCourses) || !currentTemplate) {
-      return { overallAverage: null, semesterAverages: {} };
+      return { overallAverage: null, semesterCalculations: {} };
     }
     return calculateAllAverages(currentTemplate, allCourses, grades);
   }, [currentTemplate, allCourses, grades]);
 
   const formatAverage = (avg: number | null): string => {
-    return avg === null ? 'N/A' : avg.toFixed(2);
+    return avg === null ? '-' : avg.toFixed(2);
+  };
+
+  const formatCredits = (credits: number): string => {
+    return credits % 1 === 0 ? credits.toString() : credits.toFixed(1);
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 p-4 !bg-slate-50 dark:!bg-gray-800 dark:!bg-opacity-80 rounded-lg shadow-md backdrop-blur-sm">
-      <h3 className="text-sm font-semibold mb-2 !text-gray-700 dark:!text-gray-300">ממוצעים</h3>
-      <div className="text-xs !text-gray-600 dark:!text-gray-400">
-        כללי: 
-        <span className="font-bold !text-gray-800 dark:!text-gray-200 ml-1">
+    <div 
+      dir="rtl" 
+      className="fixed bottom-4 right-4 z-50 p-3 !bg-slate-50/90 dark:!bg-gray-800/90 rounded-lg shadow-md backdrop-blur-sm max-w-xs"
+    >
+      <h3 className="text-sm font-semibold mb-2 text-center !text-gray-700 dark:!text-gray-300">סיכום נק"ז וממוצע</h3>
+      <div className="text-xs !text-gray-600 dark:!text-gray-400 mb-2 pb-2 border-b border-gray-200 dark:border-gray-600">
+        ממוצע כללי (משוקלל): 
+        <span className="font-bold !text-gray-800 dark:!text-gray-200 mr-1">
           {formatAverage(overallAverage)}
         </span>
       </div>
-      {/* Optional: Display semester averages if needed */}
-      {/* <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-        Semesters: {Object.entries(semesterAverages).map(([sem, avg]) => `S${sem}: ${formatAverage(avg)}`).join(' | ')}
-      </div> */}
+      <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+        {Object.entries(semesterCalculations).map(([semesterKey, calc]) => (
+          <div key={semesterKey} className="flex justify-between items-center text-xs">
+            <span className="!text-gray-600 dark:!text-gray-400 truncate mr-2">{semesterKey}:</span>
+            <div className="flex items-center space-x-2 space-x-reverse">
+              <span className="!text-gray-500 dark:!text-gray-500">
+                ({formatCredits(calc.totalCredits)} נק"ז)
+              </span>
+              <span className="font-medium !text-gray-700 dark:!text-gray-300 w-10 text-left">
+                {formatAverage(calc.average)}
+              </span>
+            </div>
+          </div>
+        ))}
+        {Object.keys(semesterCalculations).length === 0 && (
+          <div className="text-xs text-center !text-gray-500 dark:!text-gray-500">אין סמסטרים להצגה</div>
+        )}
+      </div>
     </div>
   );
 }; 

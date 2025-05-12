@@ -6,9 +6,31 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
   const [showPrereqTooltip, setShowPrereqTooltip] = useState(false);
 
   const handleGradeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (data.onGradeChange) {
-      data.onGradeChange(data.courseId, event.target.value);
+    const value = event.target.value;
+    // Allow empty string to clear the grade
+    if (value === '') {
+      if (data.onGradeChange) {
+        data.onGradeChange(data.courseId, '');
+      }
+      return;
     }
+
+    // Validate the input
+    const numValue = parseInt(value, 10);
+    if (
+      !isNaN(numValue) &&          // Is it a number?
+      Number.isInteger(numValue) && // Is it an integer?
+      numValue >= 0 &&             // Is it >= 0?
+      numValue <= 100              // Is it <= 100?
+    ) {
+      // Update state only if valid
+      if (data.onGradeChange) {
+        data.onGradeChange(data.courseId, value); 
+      }
+    }
+    // If not valid, do nothing - the input might show the invalid value temporarily
+    // but the state (and thus the weighted average) won't be updated.
+    // The min/max attributes should provide visual feedback/constraints in the browser.
   };
 
   const handleRemoveClick = () => {
@@ -76,16 +98,38 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
         )}
       </div>
       
-      {/* Bottom Section: Grade Input */}
-      <div className="pt-1 border-t !border-gray-200 dark:!border-gray-700 flex items-center" onMouseDown={onInputMouseDown}>
-        <label htmlFor={`grade-${data.courseId}`} className="text-xs !text-gray-500 dark:!text-gray-400">ציון:</label>
-        <input 
-          type="text" 
-          id={`grade-${data.courseId}`} 
-          defaultValue={data.grade || ''} 
-          onChange={handleGradeInputChange}
-          className="w-16 p-1 text-xs border !border-gray-300 dark:!border-gray-600 rounded !bg-gray-50 dark:!bg-gray-700 !text-gray-900 dark:!text-gray-200 focus:ring-1 focus:ring-blue-500 outline-none mr-2"
-        />
+      {/* Bottom Section: Grade Input & Binary Checkbox */}
+      <div className="pt-1 border-t !border-gray-200 dark:!border-gray-700 flex items-center justify-start space-x-2" onMouseDown={onInputMouseDown}>
+        {/* Grade Input Section */}
+        <div className="flex items-center">
+          <label htmlFor={`grade-${data.courseId}`} className="text-xs !text-gray-500 dark:!text-gray-400 ml-1">ציון:</label>
+          <input 
+            id={`grade-${data.courseId}`}
+            type="number"
+            value={data.grade || ''}
+            onChange={handleGradeInputChange}
+            min="0"
+            max="100"
+            step="1"
+            placeholder="--"
+            className="nodrag px-1 py-0.5 text-xs w-12 rounded border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
+            aria-label={`ציון עבור ${data.label}`}
+            disabled={data.isBinary} // Disable if isBinary is true
+          />
+        </div>
+        {/* Binary Checkbox Section */}
+        <div className="flex items-center">
+          <input 
+            type="checkbox"
+            id={`binary-${data.courseId}`}
+            checked={!!data.isBinary} // Ensure it's a boolean for the checkbox
+            onChange={(e) => data.onBinaryChange && data.onBinaryChange(data.courseId, e.target.checked)}
+            className="nodrag w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 mr-2"
+          />
+          <label htmlFor={`binary-${data.courseId}`} className="mr-1.5 text-xs !text-gray-600 dark:!text-gray-400 select-none">
+            פטור/בינארי
+          </label>
+        </div>
       </div>
 
       {/* Handles need to be outside the flex container for absolute positioning relative to the node */}

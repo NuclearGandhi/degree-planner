@@ -15,15 +15,22 @@ export function calculateWeightedAverage(
 
     courses.forEach(course => {
         const gradeStr = grades[course._id];
-        if (gradeStr !== undefined && gradeStr !== '' && course.credits > 0) {
-            const gradeNum = parseFloat(gradeStr);
-            // Only include valid numeric grades and courses with credits > 0 in the average
-            if (!isNaN(gradeNum)) {
-                totalPoints += gradeNum * course.credits;
-                totalCredits += course.credits;
+        // Explicitly convert credits to a number and check if it's valid and positive
+        const creditsNum = Number(course.credits);
+
+        // Ensure gradeStr exists, is not empty, credits are valid positive numbers
+        if (gradeStr !== undefined && gradeStr !== '' && !isNaN(creditsNum) && creditsNum > 0) {
+            // Try parsing grade as an integer
+            const gradeNum = parseInt(gradeStr, 10);
+            // Check if grade is a valid integer AND within the 0-100 range
+            if (!isNaN(gradeNum) && Number.isInteger(gradeNum) && gradeNum >= 0 && gradeNum <= 100) {
+                // Use the numeric credits value in calculations
+                totalPoints += gradeNum * creditsNum; 
+                totalCredits += creditsNum;
             }
-            // Decide how to handle non-numeric grades (e.g., "Pass", "Fail") - currently ignored
+            // Ignore grades that are not integers between 0 and 100, or non-numeric grades.
         }
+        // Also ignore courses with invalid or non-positive credits
     });
 
     if (totalCredits === 0) {
@@ -31,6 +38,12 @@ export function calculateWeightedAverage(
     }
 
     return totalPoints / totalCredits;
+}
+
+// Define a return type for clarity
+interface SemesterCalculationResult {
+    average: number | null;
+    totalCredits: number;
 }
 
 /**
@@ -46,14 +59,16 @@ export function calculateAllAverages(
     grades: Record<string, string>
 ): {
     overallAverage: number | null;
-    semesterAverages: Record<string, number | null>;
+    // Updated semesterAverages to hold more data
+    semesterCalculations: Record<string, SemesterCalculationResult>;
 } {
-    const semesterAverages: Record<string, number | null> = {};
+    // Changed name for clarity
+    const semesterCalculations: Record<string, SemesterCalculationResult> = {};
     let allCoursesInPlan: RawCourseData[] = [];
 
     if (!Array.isArray(allCoursesData)) {
         console.warn("Data Input Warning (calculateAllAverages): allCoursesData is not an array!", allCoursesData);
-        return { overallAverage: null, semesterAverages: {} };
+        return { overallAverage: null, semesterCalculations: {} };
     }
 
     if (template && typeof template.semesters === 'object' && template.semesters !== null) {
@@ -62,7 +77,22 @@ export function calculateAllAverages(
                 .map(id => allCoursesData.find(c => c._id === id))
                 .filter(Boolean) as RawCourseData[];
             
-            semesterAverages[semesterKey] = calculateWeightedAverage(coursesInSemester, grades);
+            // Calculate weighted average for the semester (only graded courses)
+            const semesterAverage = calculateWeightedAverage(coursesInSemester, grades);
+            
+            // Calculate total credits for *all* courses in the semester
+            const semesterTotalCredits = coursesInSemester.reduce((sum, course) => {
+                // Ensure credits is treated as a number, default to 0 if invalid/missing
+                const credits = Number(course.credits);
+                return sum + (isNaN(credits) ? 0 : credits);
+            }, 0);
+
+            // Store both average and total credits
+            semesterCalculations[semesterKey] = {
+                average: semesterAverage,
+                totalCredits: semesterTotalCredits
+            };
+            
             allCoursesInPlan = allCoursesInPlan.concat(coursesInSemester);
         });
     } else if (template) {
@@ -71,5 +101,5 @@ export function calculateAllAverages(
 
     const overallAverage = calculateWeightedAverage(allCoursesInPlan, grades);
 
-    return { overallAverage, semesterAverages };
+    return { overallAverage, semesterCalculations }; // Updated return key
 } 

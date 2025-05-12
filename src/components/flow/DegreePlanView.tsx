@@ -35,6 +35,7 @@ import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
 import { Logo } from '../../components/ui/Logo';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
 import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
+import { CourseNodeData } from '../../types/flow';
 
 const nodeTypes = {
   course: CourseNode,
@@ -71,6 +72,8 @@ const transformDataToNodes = (
   template: DegreeTemplate | undefined,
   allCourses: RawCourseData[],
   grades: Record<string, string>,
+  currentNodes: AppNode[],
+  handleBinaryChange: (courseId: string, isBinary: boolean) => void,
   onAddCourseToSemesterCallback: (semesterNumber: number) => void,
   onAddSemesterCallbackParam: () => void,
   onGradeChangeCallback: (courseId: string, grade: string) => void,
@@ -79,7 +82,7 @@ const transformDataToNodes = (
   onClassificationToggleCallback: (courseId: string) => void,
   classificationCreditsState: Record<string, number>,
   onClassificationCreditsChangeCallback: (courseId: string, credits: number) => void,
-  globalRules: DegreeRule[], // Added globalRules parameter
+  globalRules: DegreeRule[],
   initialMandatoryCourseIds?: string[],
   onEditRuleCallback?: (ruleId: string) => void,
   onDeleteRuleCallback?: (ruleId: string) => void
@@ -289,6 +292,14 @@ const transformDataToNodes = (
 
   currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
 
+  // Create map of isBinary states from currentNodes
+  const currentBinaryStates = currentNodes.reduce((acc, node) => {
+    if (node.type === 'course' && node.data.courseId) {
+      acc[node.data.courseId] = node.data.isBinary || false;
+    }
+    return acc;
+  }, {} as Record<string, boolean>);
+
   // Semester Title and Course Node Generation (uses the calculated currentContentY)
   semesterEntries.forEach(([semesterName, courseIds], semesterIndex) => {
     const semesterNumberForLayout = semesterIndex + 1;
@@ -328,21 +339,25 @@ const transformDataToNodes = (
 
       const nodeId = courseId;
       const nodePosition = { x: semesterXPos, y: currentYInSemester };
-      console.log(`[transformDataToNodes] Creating Course Node: ID=${nodeId}, Position=`, nodePosition);
       
+      // Ensure the data matches CourseNodeData type structure
+      const courseNodeData: CourseNodeData = {
+        label: courseData.name || courseId,
+        courseId: courseData._id,
+        credits: courseData.credits !== undefined ? courseData.credits : 'N/A',
+        grade: grades[courseId] || '',
+        onGradeChange: onGradeChangeCallback,
+        onRemoveCourse: onRemoveCourseCallback,
+        prerequisitesMet: prereqsMet,
+        isBinary: currentBinaryStates[courseId] || false, // Set isBinary from map
+        onBinaryChange: handleBinaryChange, // Pass the handler
+      };
+
       flowNodes.push({
         id: nodeId,
         type: 'course',
         position: nodePosition,
-        data: {
-          label: courseData.name,
-          courseId: courseData._id,
-          credits: courseData.credits,
-          grade: grades[courseId] || '',
-          onGradeChange: onGradeChangeCallback,
-          onRemoveCourse: onRemoveCourseCallback,
-          prerequisitesMet: prereqsMet,
-        },
+        data: courseNodeData, // Use the typed data object
       });
       currentYInSemester += NODE_HEIGHT_COURSE + VERTICAL_SPACING_RULE;
     });
@@ -583,14 +598,27 @@ function DegreePlanView() {
     setSemesterToAddCourseTo(null);
   }, []);
 
-  const handleGradeChangeCallback = useCallback((courseId: string, grade: string) => {
-    setGrades(prevGrades => ({
-      ...prevGrades,
-      [courseId]: grade,
-    }));
-    // TODO: Add validation for grade input (e.g., numeric, range)
-    // TODO: Trigger rule re-calculation and overall average calculation here
-  }, []);
+  const handleGradeChange = useCallback((courseId: string, grade: string) => {
+    setGrades(prevGrades => ({ ...prevGrades, [courseId]: grade }));
+    if (grade !== '') {
+      setNodes(nds => nds.map(node => 
+        (node.type === 'course' && node.data.courseId === courseId && node.data.isBinary) 
+          ? { ...node, data: { ...node.data, isBinary: false } } 
+          : node
+      ));
+    }
+  }, [setGrades, setNodes]);
+
+  const handleBinaryChange = useCallback((courseId: string, isBinary: boolean) => {
+    setNodes(nds => nds.map(node =>
+      (node.type === 'course' && node.data.courseId === courseId)
+        ? { ...node, data: { ...node.data, isBinary: isBinary } }
+        : node
+    ));
+    if (isBinary) {
+      setGrades(prevGrades => ({ ...prevGrades, [courseId]: '' }));
+    }
+  }, [setNodes, setGrades]);
 
   // Callback for handling course removal
   const handleRemoveCourseCallback = useCallback((courseIdToRemove: string) => {
@@ -926,30 +954,55 @@ function DegreePlanView() {
       return;
     }
 
-    console.log("[DegreePlanView] Node/Edge Update Effect: Guard passed. Generating nodes and edges with currentTemplate:", degreeTemplate, "and allCourses count:", allCoursesData.length);
+    console.log("[DegreePlanView] Node/Edge Update Effect: Guard passed. Generating nodes and edges...");
     const newNodes = transformDataToNodes(
       degreeTemplate,
       allCoursesData,
-      grades,
-      handleAddCourseToSemesterCallback,
+      grades, 
+      nodes, // Pass current nodes state (needed to read isBinary)
+      handleBinaryChange, 
+      handleAddCourseToSemesterCallback, 
       handleAddSemesterCallback,
-      handleGradeChangeCallback,
+      handleGradeChange,
       handleRemoveCourseCallback,
       classificationChecked,
       handleClassificationToggle,
       classificationCredits,
       handleClassificationCreditsChange,
-      currentGlobalRules, // Pass global rules
+      currentGlobalRules, 
       initialMandatoryCourseIds,
       handleEditRule,
       handleDeleteRule
     );
     const newEdges = transformDataToEdges(degreeTemplate, allCoursesData);
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
-    // console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes content:", JSON.stringify(newNodes, null, 2)); // Potentially very verbose
-    setNodes(newNodes);
-    setEdges(newEdges); // This sets the base edges
-  }, [degreeTemplate, allCoursesData, grades, setNodes, setEdges, handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChangeCallback, handleRemoveCourseCallback, isLoading, handleEditRule, handleDeleteRule, initialMandatoryCourseIds, classificationChecked, handleClassificationToggle, classificationCredits, handleClassificationCreditsChange, currentGlobalRules]); // Added currentGlobalRules
+    
+    // Simple comparison to prevent unnecessary updates if structure hasn't changed
+    // Note: JSON.stringify can be inefficient for large states. Consider more sophisticated checks if performance becomes an issue.
+    const nodesChanged = JSON.stringify(newNodes) !== JSON.stringify(nodes);
+    const edgesChanged = JSON.stringify(newEdges) !== JSON.stringify(edges);
+
+    if (nodesChanged) {
+      console.log("[DegreePlanView] Node/Edge Update Effect: Applying node updates.");
+      setNodes(newNodes);
+    }
+    if (edgesChanged) {
+      console.log("[DegreePlanView] Node/Edge Update Effect: Applying edge updates.");
+      setEdges(newEdges);
+    }
+
+  }, [
+    // CORE DATA DEPENDENCIES:
+    degreeTemplate, allCoursesData, grades, classificationChecked, 
+    classificationCredits, currentGlobalRules, initialMandatoryCourseIds,
+    // CALLBACK DEPENDENCIES (should be stable via useCallback):
+    handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChange, 
+    handleRemoveCourseCallback, handleBinaryChange, handleClassificationToggle, 
+    handleClassificationCreditsChange, handleEditRule, handleDeleteRule,
+    // STABLE STATE SETTERS & VALUES:
+    setNodes, setEdges, isLoading 
+    // *** REMOVED 'nodes' and 'edges' from dependencies ***
+  ]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);
