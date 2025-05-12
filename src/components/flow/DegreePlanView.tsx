@@ -492,7 +492,7 @@ function DegreePlanView() {
     // Set a new timeout to update the state after a delay
     classificationCreditsDebounceTimeoutRef.current = window.setTimeout(() => {
       setClassificationCredits(prev => ({ ...prev, [courseId]: credits }));
-    }, 400); // 400ms debounce delay
+    }, 100); // 400ms debounce delay
   }, []);
 
   // Derived state for courses in plan to pass to modal
