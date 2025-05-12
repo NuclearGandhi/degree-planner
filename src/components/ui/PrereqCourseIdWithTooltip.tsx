@@ -19,15 +19,13 @@ const PrereqCourseIdWithTooltip: React.FC<PrereqCourseIdWithTooltipProps> = ({ c
       setCourseName(foundCourse ? foundCourse.name : null);
 
       let met = false;
-      if (coursesInPlanIds && courseId) {
-        // 1. Check if the prerequisite courseId itself is directly in the plan
+      if (coursesInPlanIds && courseId && allCourses) {
+        // Check if the prerequisite courseId itself is directly in the plan
         if (coursesInPlanIds.has(courseId)) {
           met = true;
         } else {
-          // 2. If not, check if any course *in the plan* covers this prerequisite courseId via no_credit_courses
+          // If not, check if any course *in the plan* covers this prerequisite courseId via no_credit_courses
           for (const takenCourseId of coursesInPlanIds) {
-            // It's possible the takenCourseId itself is not in allCourses if it's an old/custom entry.
-            // getEquivalentCourses will still return a set containing at least takenCourseId.
             const equivalentsOfTakenCourse = getEquivalentCourses(takenCourseId, allCourses);
             if (equivalentsOfTakenCourse.has(courseId)) {
               met = true;

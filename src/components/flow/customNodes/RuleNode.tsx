@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NodeProps, Node as RFNode } from '@xyflow/react'; // No Handles needed for rule nodes if they are informational
 import { RuleNodeData } from '../../../types/flow'; // Adjusted import path, removed RuleNodeData import
 import CustomNumberInput from '../../ui/CustomNumberInput'; // Added import
+import ProgressBarLegend from '../../ui/ProgressBarLegend'; // Import the legend component
 
 // New sub-component for each classification item row
 interface ClassificationItemRowProps {
@@ -122,12 +123,22 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
   const onClassificationToggle = data.onClassificationToggle;
   const onClassificationCreditsChange = data.onClassificationCreditsChange; // Pass this down
 
-  // Check for single progress bar for non-consolidated rules
-  const showSingleProgressBar = !consolidatedRules && typeof data.currentValue === 'number' && typeof data.requiredValue === 'number' && data.requiredValue > 0;
-  // Ensure values are treated as numbers for calculation, defaulting to 0 if check failed (though showProgressBar would be false)
-  const currentValNum = typeof data.currentValue === 'number' ? data.currentValue : 0;
-  const requiredValNum = typeof data.requiredValue === 'number' && data.requiredValue > 0 ? data.requiredValue : 1; // Avoid division by zero
-  const singleProgressPercent = showSingleProgressBar ? Math.min(100, Math.max(0, (currentValNum / requiredValNum) * 100)) : 0;
+  // Updated conditions for showing progress bars based on new values
+  const showProgressBar = 
+    !consolidatedRules && 
+    typeof data.currentValueDone === 'number' &&
+    typeof data.currentValuePlanned === 'number' &&
+    typeof data.requiredValue === 'number' && 
+    data.requiredValue > 0;
+
+  // Calculate percentages for the three-state progress bar
+  const requiredValNum = showProgressBar ? data.requiredValue! : 1; // Avoid division by zero if not shown
+  const doneValNum = showProgressBar ? data.currentValueDone! : 0;
+  const plannedValNum = showProgressBar ? data.currentValuePlanned! : 0;
+
+  const percentDone = showProgressBar ? Math.min(100, Math.max(0, (doneValNum / requiredValNum) * 100)) : 0;
+  // Percentage for the part that is planned but not yet done
+  const percentPlannedNotDone = showProgressBar ? Math.min(100 - percentDone, Math.max(0, ((plannedValNum - doneValNum) / requiredValNum) * 100)) : 0;
 
   const handleEdit = () => {
     if (data.onEditRule) {
@@ -145,20 +156,43 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
   return (
     <div dir="rtl" className={`rule-node p-3 border-r-4 rounded-md shadow-lg w-[340px] min-h-[140px] ${statusColor} flex flex-col justify-between`}> {/* Width increased to 340px */}
       <div> {/* Added a wrapper div for main content */}
-        {/* Title: Smaller for consolidated, larger for single/multi-list */}
-        <div className={`font-semibold mb-2 ${consolidatedRules && consolidatedRules.length > 0 ? 'text-base' : 'text-lg'} ${textColor}`}>{description}</div>
+        {/* Title Section: Use flex, justify-end for RTL alignment */}
+        <div className="flex items-center justify-end mb-2">
+          {/* Title: Smaller for consolidated, larger for single/multi-list */}
+          <div className={`font-semibold ${consolidatedRules && consolidatedRules.length > 0 ? 'text-base' : 'text-lg'} ${textColor}`}>{description}</div>
+          {/* Render Legend ONLY for consolidated rules node, add margin */}
+          {consolidatedRules && consolidatedRules.length > 0 && (
+            <div className="mr-4"> {/* Added margin for spacing */} 
+              <ProgressBarLegend />
+            </div>
+          )}
+        </div>
         
         {/* Display consolidated rules if they exist */}
         {consolidatedRules && consolidatedRules.length > 0 && (
           <div className="space-y-2 mt-1"> {/* Reduced space-y-3 to space-y-2 as rows are more compact */}
             {consolidatedRules.map((rule) => {
-              const subRuleShowBar = typeof rule.currentValue === 'number' && 
-                                   typeof rule.requiredValue === 'number' && 
-                                   rule.requiredValue > 0;
+              // Updated conditions for sub-rule progress bar
+              const subRuleShowBar = 
+                typeof rule.currentValueDone === 'number' &&
+                typeof rule.currentValuePlanned === 'number' &&
+                typeof rule.requiredValue === 'number' && 
+                rule.requiredValue > 0;
               
-              const subRulePercent = subRuleShowBar 
-                ? Math.min(100, Math.max(0, (rule.currentValue! / rule.requiredValue!) * 100)) 
+              const subReqValNum = subRuleShowBar ? rule.requiredValue! : 1;
+              const subDoneValNum = subRuleShowBar ? rule.currentValueDone! : 0;
+              const subPlannedValNum = subRuleShowBar ? rule.currentValuePlanned! : 0;
+
+              const subPercentDone = subRuleShowBar 
+                ? Math.min(100, Math.max(0, (subDoneValNum / subReqValNum) * 100)) 
                 : 0;
+              const subPercentPlannedNotDone = subRuleShowBar
+                ? Math.min(100 - subPercentDone, Math.max(0, ((subPlannedValNum - subDoneValNum) / subReqValNum) * 100))
+                : 0;
+
+              // Determine dynamic classes for rounding (RTL)
+              const greenRoundedClass = subPercentDone >= 99.9 && subPercentPlannedNotDone < 0.1 ? 'rounded-full' : 'rounded-r-full';
+              const yellowRoundedClass = subPercentPlannedNotDone > 0.1 ? 'rounded-l-full' : '';
 
               return (
                 // Each sub-rule is a flex row, items centered vertically, space between groups
@@ -172,11 +206,25 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
 
                     {/* Middle part: Progress Bar */}
                     {subRuleShowBar && (
-                      <div className="w-1/3 flex-shrink-0 bg-gray-200 rounded-full h-2.5 dark:bg-gray-600 mx-2">
+                      <div className="w-1/3 flex-shrink-0 bg-gray-300 dark:bg-gray-600 rounded-full h-2.5 relative mx-2 overflow-hidden">
+                        {/* Done Part (RTL: starts from right) */}
                         <div 
-                          className={`h-2.5 rounded-full ${rule.isSatisfied ? 'bg-green-500' : 'bg-amber-500'}`}
-                          style={{ width: `${subRulePercent}%` }}
+                          className={`absolute top-0 right-0 h-2.5 bg-green-500 dark:bg-green-600 ${greenRoundedClass}`}
+                          style={{ width: `${subPercentDone}%`, zIndex: 3 }}
                         ></div>
+                        {/* Planned but not Done Part (RTL: extends left from Done part) */}
+                        {subPercentPlannedNotDone > 0.1 && (
+                          <div 
+                            className={`absolute top-0 h-2.5 bg-yellow-400 dark:bg-yellow-500 ${yellowRoundedClass}`}
+                            style={{
+                              width: `${subPercentPlannedNotDone}%`,
+                              right: `${subPercentDone}%`, // Position from right edge of green bar
+                              zIndex: 2,
+                            }}
+                          ></div>
+                        )}
+                        {/* {(subPercentDone === 0 && subPercentPlannedNotDone === 0) && 
+                          <div className="h-2.5 rounded-full"></div>} */}
                       </div>
                     )}
                     {!subRuleShowBar && <div className="w-1/3 flex-shrink-0 h-2.5 mx-2"></div>} {/* Placeholder */}
@@ -204,14 +252,39 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
         )}
 
         {/* Display single progress bar (only if not consolidated) */}
-        {!consolidatedRules && showSingleProgressBar && (
+        {!consolidatedRules && showProgressBar && (
           <>
             <div className={`text-base mb-1 ${textColor}`}>התקדמות: {currentProgress}</div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 my-1">
-              <div 
-                className={`h-2.5 rounded-full ${isSatisfied ? 'bg-green-500' : 'bg-amber-500'}`}
-                style={{ width: `${singleProgressPercent}%` }}
-              ></div>
+            <div className="w-full bg-gray-300 dark:bg-gray-600 rounded-full h-3 relative my-1 overflow-hidden"> {/* Added overflow-hidden */}
+              {/* Determine dynamic classes for rounding (RTL) */}
+              {(() => {
+                const greenRoundedClass = percentDone >= 99.9 && percentPlannedNotDone < 0.1 ? 'rounded-full' : 'rounded-r-full';
+                const yellowRoundedClass = percentPlannedNotDone > 0.1 ? 'rounded-l-full' : '';
+                return (
+                  <>
+                    {/* Done Part (Green - RTL: starts from right) */}
+                    <div 
+                      className={`absolute top-0 right-0 h-3 bg-green-500 dark:bg-green-600 ${greenRoundedClass}`}
+                      style={{ width: `${percentDone}%`, zIndex: 3 }}
+                    ></div>
+                    {/* Planned but not Done Part (Yellow - RTL: extends left from Done part) */}
+                    {percentPlannedNotDone > 0.1 && (
+                      <div 
+                        className={`absolute top-0 h-3 bg-yellow-400 dark:bg-yellow-500 ${yellowRoundedClass}`}
+                        style={{ 
+                          width: `${percentPlannedNotDone}%`, 
+                          right: `${percentDone}%`, // Position from right edge of green bar 
+                          zIndex: 2,
+                        }}
+                      ></div>
+                    )}
+                  </>
+                );
+              })()}
+              {/* If percentDone + percentPlannedNotDone < 100, the gray background shows through */}
+              {/* Removed the empty div for rounding, handled by outer div */}
+              {/* {(percentDone === 0 && percentPlannedNotDone === 0) && 
+                <div className="h-3 rounded-full"></div> */}
             </div>
           </>
         )}
@@ -220,26 +293,57 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
         {!consolidatedRules && listDetails && listDetails.length > 0 && (
           <div className="mt-1 space-y-1.5">
             {listDetails.map((item, index) => {
-              const itemShowBar = typeof item.currentValue === 'number' && typeof item.requiredValue === 'number' && item.requiredValue > 0;
-              const itemCurrentVal = itemShowBar ? item.currentValue : 0;
-              const itemRequiredVal = itemShowBar ? item.requiredValue : 1;
-              const itemPercent = itemShowBar ? Math.min(100, Math.max(0, (itemCurrentVal / itemRequiredVal) * 100)) : 0;
+              // Updated conditions for list item progress bar
+              const itemShowBar = 
+                typeof item.currentValueDone === 'number' && 
+                typeof item.currentValuePlanned === 'number' && 
+                typeof item.requiredValue === 'number' && 
+                item.requiredValue > 0;
+
+              const itemReqValNum = itemShowBar ? item.requiredValue! : 1;
+              const itemDoneValNum = itemShowBar ? item.currentValueDone! : 0;
+              const itemPlannedValNum = itemShowBar ? item.currentValuePlanned! : 0;
+
+              const itemPercentDone = itemShowBar 
+                ? Math.min(100, Math.max(0, (itemDoneValNum / itemReqValNum) * 100)) 
+                : 0;
+              const itemPercentPlannedNotDone = itemShowBar
+                ? Math.min(100 - itemPercentDone, Math.max(0, ((itemPlannedValNum - itemDoneValNum) / itemReqValNum) * 100))
+                : 0;
               
+              // Determine dynamic classes for rounding (RTL)
+              const itemGreenRoundedClass = itemPercentDone >= 99.9 && itemPercentPlannedNotDone < 0.1 ? 'rounded-full' : 'rounded-r-full';
+              const itemYellowRoundedClass = itemPercentPlannedNotDone > 0.1 ? 'rounded-l-full' : '';
+
               return (
                 <div key={index} className={`flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-b-0`}>
                   {/* Left part: List Name and Progress Text */}
                   <div className="flex-grow min-w-0 mr-3">
                     <p className={`font-medium text-sm truncate ${item.isSatisfied ? 'text-green-700 dark:text-green-300' : textColor}`}>{item.listName}</p>
-                    <p className={`text-xs ${item.isSatisfied ? 'text-green-600 dark:text-green-400' : textColor}`}>{item.currentValue}/{item.requiredValue}</p>
+                    <p className={`text-xs ${item.isSatisfied ? 'text-green-600 dark:text-green-400' : textColor}`}>{item.currentValueDone}/{item.requiredValue}</p>
                   </div>
 
                   {/* Right part: Progress Bar */}
                   {itemShowBar && (
-                    <div className="w-1/3 flex-shrink-0 bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                    <div className="w-1/3 flex-shrink-0 bg-gray-300 dark:bg-gray-600 rounded-full h-2 relative overflow-hidden"> {/* Added overflow-hidden */}
+                      {/* Done Part (RTL: starts from right) */}
                       <div 
-                        className={`h-2 rounded-full ${item.isSatisfied ? 'bg-green-500' : 'bg-amber-500'}`}
-                        style={{ width: `${itemPercent}%` }}
+                        className={`absolute top-0 right-0 h-2 bg-green-500 dark:bg-green-600 ${itemGreenRoundedClass}`}
+                        style={{ width: `${itemPercentDone}%`, zIndex: 3 }}
                       ></div>
+                      {/* Planned but not Done Part (RTL: extends left from Done part) */}
+                      {itemPercentPlannedNotDone > 0.1 && (
+                        <div 
+                          className={`absolute top-0 h-2 bg-yellow-400 dark:bg-yellow-500 ${itemYellowRoundedClass}`}
+                          style={{
+                            width: `${itemPercentPlannedNotDone}%`,
+                            right: `${itemPercentDone}%`, // Position from right edge of green bar
+                            zIndex: 2,
+                          }}
+                        ></div>
+                      )}
+                      {/* {(itemPercentDone === 0 && itemPercentPlannedNotDone === 0) && 
+                        <div className="h-2 rounded-full"></div> } */}
                     </div>
                   )}
                   {!itemShowBar && <div className="w-1/3 flex-shrink-0 h-2"></div>} {/* Placeholder */}

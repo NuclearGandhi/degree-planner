@@ -2,15 +2,19 @@ import { DegreeRule, RawCourseData } from '../types/data';
 
 export interface EvaluatedRuleStatus {
   currentProgressString: string;
-  isSatisfied: boolean;
-  currentValue: number | null; // Current numeric value for progress
+  isSatisfied: boolean; // Overall satisfaction based on "done" courses
+  // currentValue is now deprecated in favor of planned/done
+  // currentValue: number | null; 
+  currentValuePlanned: number | null; // Progress based on courses *in plan*
+  currentValueDone: number | null;    // Progress based on courses *with grades*
   requiredValue: number | null; // Required numeric value for progress
   // Details for multi-list rules
   listProgressDetails?: { 
     listName: string; 
-    currentValue: number; 
+    currentValuePlanned: number; 
+    currentValueDone: number;
     requiredValue: number; 
-    isSatisfied: boolean; 
+    isSatisfied: boolean; // Based on done courses 
   }[] | null; 
   // We can add more detailed progress info if needed, e.g., current_credits, required_credits
 }
@@ -31,10 +35,17 @@ export function evaluateRule(
   classificationCredits?: Record<string, number>
 ): EvaluatedRuleStatus {
   let currentProgressString = "N/A";
-  let isSatisfied = false;
-  let currentValue: number | null = null;
+  let isSatisfied = false; // Based on *done* courses
+  let currentValuePlanned: number | null = null;
+  let currentValueDone: number | null = null;
   let requiredValue: number | null = null;
-  let listProgressDetails: EvaluatedRuleStatus['listProgressDetails'] = null; // Initialize new property
+  let listProgressDetails: EvaluatedRuleStatus['listProgressDetails'] = null;
+
+  // Helper to check if a course is considered "done" (has a non-empty grade)
+  const isCourseDone = (courseId: string): boolean => {
+    const gradeStr = grades[courseId];
+    return !!gradeStr && gradeStr.trim() !== '';
+  };
 
   // Helper to parse grade string to number, handling non-numeric/empty as 0 or NaN for checks
   const getNumericGrade = (courseId: string): number => {
@@ -45,106 +56,137 @@ export function evaluateRule(
   };
 
   switch (rule.type) {
+    // --- Rule Types involving Credits --- 
     case 'total_credits':
-      if (rule.required_credits !== undefined) {
-        let currentCredits = coursesInPlan.reduce((sum, course) => sum + Number(course.credits || 0), 0);
-        
-        // if (import.meta.env.DEV) { // Temporarily bypass DEV check
-          console.log('[evaluateRule] total_credits - initial sum:', currentCredits, 'type:', typeof currentCredits);
-          console.log('[evaluateRule] total_credits - classificationChecked:', classificationChecked);
-          console.log('[evaluateRule] total_credits - classificationCredits:', classificationCredits);
-        // }
-
-        // Add credits from Miluim exemption if checked and defined
-        if (classificationChecked && classificationChecked['miluim_exemption'] && classificationCredits && typeof classificationCredits['miluim_exemption'] === 'number') {
-          currentCredits += classificationCredits['miluim_exemption'];
-          // if (import.meta.env.DEV) { // Temporarily bypass DEV check
-            console.log('[evaluateRule] total_credits - after adding miluim:', currentCredits, '(added:', classificationCredits['miluim_exemption'], ')');
-          // }
-        } else if (classificationChecked && classificationChecked['miluim_exemption']) { // Temporarily bypass DEV check for this log too
-          console.log('[evaluateRule] total_credits - miluim checked but credits not a number or undefined:', classificationCredits ? classificationCredits['miluim_exemption'] : 'undefined');
-        }
-
-        currentValue = currentCredits;
-        requiredValue = rule.required_credits;
-
-        // if (import.meta.env.DEV) { // Temporarily bypass DEV check
-          console.log('[evaluateRule] total_credits - final currentValue:', currentValue, 'type:', typeof currentValue);
-          console.log('[evaluateRule] total_credits - final requiredValue:', requiredValue, 'type:', typeof requiredValue);
-        // }
-
-        currentProgressString = `${currentValue}/${requiredValue} נק"ז`;
-        isSatisfied = currentValue >= requiredValue;
-      }
-      break;
-
     case 'minCredits':
-      if (rule.min !== undefined) {
-        const currentCredits = coursesInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
-        currentValue = currentCredits;
-        requiredValue = rule.min;
-        currentProgressString = `${currentValue}/${requiredValue} נק"ז`;
-        isSatisfied = currentValue >= requiredValue;
-      } else {
-        currentProgressString = "כלל 'minCredits' לא הוגדר כראוי (חסר 'min')";
-      }
-      break;
-
     case 'credits_from_list':
-      if (rule.course_list_name && rule.required_credits !== undefined && degreeCourseLists && Array.isArray(degreeCourseLists[rule.course_list_name])) {
-        const listCourseIds = degreeCourseLists[rule.course_list_name] as string[];
-        const coursesFromListInPlan = coursesInPlan.filter(cp => listCourseIds.includes(cp._id));
-        const currentCreditsFromList = coursesFromListInPlan.reduce((sum, course) => sum + course.credits, 0);
-        currentValue = currentCreditsFromList;
-        requiredValue = rule.required_credits;
-        currentProgressString = `${currentValue}/${requiredValue} נק"ז מ${rule.course_list_name}`;
-        isSatisfied = currentValue >= requiredValue;
-      } else {
-        currentProgressString = `רשימת קורסים "${rule.course_list_name}" לא נמצאה או שחסר required_credits.`;
+    case 'minCreditsFromMandatory':
+    case 'minCreditsFromAnySelectiveList': {
+      let reqValue: number | undefined = undefined;
+      const unit = 'נק"ז'; // Default unit is credits
+      let coursesToConsider: RawCourseData[] = [];
+      let descriptionSuffix = '';
+      
+      // Determine the required value and the list of courses to check based on rule type
+      if (rule.type === 'total_credits') reqValue = rule.required_credits;
+      if (rule.type === 'minCredits') reqValue = rule.min;
+      if (rule.type === 'credits_from_list') reqValue = rule.required_credits;
+      if (rule.type === 'minCreditsFromMandatory') reqValue = rule.min;
+      if (rule.type === 'minCreditsFromAnySelectiveList') reqValue = rule.min;
+      
+      if (reqValue === undefined) {
+        currentProgressString = `כלל '${rule.type}' לא הוגדר כראוי (חסר ערך נדרש).`;
+        break;
       }
-      break;
+      requiredValue = reqValue;
 
-    case 'minCoursesFromList':
+      // Determine the subset of courses to evaluate based on the rule type
+      if (rule.type === 'total_credits' || rule.type === 'minCredits') {
+        coursesToConsider = coursesInPlan; // Consider all courses in the plan
+      } else if (rule.type === 'credits_from_list' && rule.course_list_name && degreeCourseLists && Array.isArray(degreeCourseLists[rule.course_list_name])) {
+        const listIds = degreeCourseLists[rule.course_list_name] as string[];
+        coursesToConsider = coursesInPlan.filter(cp => listIds.includes(cp._id));
+        descriptionSuffix = ` מ${rule.course_list_name}`;
+      } else if (rule.type === 'minCreditsFromMandatory' && initialTemplateMandatoryCourseIds) {
+        const mandatoryIds = new Set(initialTemplateMandatoryCourseIds);
+        coursesToConsider = coursesInPlan.filter(cp => mandatoryIds.has(cp._id));
+        descriptionSuffix = ` (חובה)`;
+      } else if (rule.type === 'minCreditsFromAnySelectiveList' && degreeCourseLists) {
+        const selectiveIds = new Set<string>();
+        Object.entries(degreeCourseLists).forEach(([, list]) => {
+          if (Array.isArray(list) && list.every(item => typeof item === 'string')) {
+            (list as string[]).forEach(id => selectiveIds.add(id));
+          }
+        });
+        coursesToConsider = coursesInPlan.filter(cp => selectiveIds.has(cp._id));
+        descriptionSuffix = ` (בחירה)`;
+      } else {
+        currentProgressString = `כלל '${rule.type}' לא הוגדר כראוי (בעיה ברשימת הקורסים).`;
+        break;
+      }
+
+      // Calculate Planned and Done credits from the relevant subset
+      currentValuePlanned = coursesToConsider.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+      currentValueDone = coursesToConsider
+        .filter(course => isCourseDone(course._id))
+        .reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+
+      // Special handling for total_credits to include classification exemptions
+      let doneCreditsWithExemptions = currentValueDone;
+      if (rule.type === 'total_credits' && classificationChecked && classificationCredits) {
+        if (classificationChecked['miluim_exemption'] && typeof classificationCredits['miluim_exemption'] === 'number') {
+          doneCreditsWithExemptions += classificationCredits['miluim_exemption'];
+        }
+        // Add other classification credits if needed
+      }
+      
+      // Update satisfaction based on *done* credits (including exemptions for total_credits)
+      isSatisfied = doneCreditsWithExemptions >= requiredValue;
+      // Progress string shows DONE / REQUIRED (can be adapted later if needed)
+      currentProgressString = `${doneCreditsWithExemptions}/${requiredValue} ${unit}${descriptionSuffix}`;
+      // Ensure Planned is never less than Done, especially with exemptions
+      currentValuePlanned = Math.max(currentValuePlanned, doneCreditsWithExemptions); 
+      
+      // Use doneCreditsWithExemptions for currentValueDone ONLY for total_credits rule
+      // For other credit rules, exemption credits shouldn't count towards list/mandatory/selective done totals.
+      if (rule.type !== 'total_credits') {
+           currentValueDone = coursesToConsider
+            .filter(course => isCourseDone(course._id))
+            .reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+           isSatisfied = currentValueDone >= requiredValue;
+           currentProgressString = `${currentValueDone}/${requiredValue} ${unit}${descriptionSuffix}`;
+      }
+      
+      break;
+    }
+
+    // --- Rule Types involving Course Counts --- 
+    case 'minCoursesFromList': {
+      const unit = 'קורסים'; // Define unit for this scope
       if (rule.listName && rule.min !== undefined && degreeCourseLists && Array.isArray(degreeCourseLists[rule.listName])) {
         const listCourseIds = degreeCourseLists[rule.listName] as string[];
         const coursesFromListInPlan = coursesInPlan.filter(cp => listCourseIds.includes(cp._id));
-        currentValue = coursesFromListInPlan.length;
+        
         requiredValue = rule.min;
-        currentProgressString = `${currentValue}/${requiredValue} קורסים מ${rule.listName}`;
-        isSatisfied = currentValue >= requiredValue;
+        currentValuePlanned = coursesFromListInPlan.length;
+        currentValueDone = coursesFromListInPlan.filter(cp => isCourseDone(cp._id)).length;
+        isSatisfied = currentValueDone >= requiredValue;
+        currentProgressString = `${currentValueDone}/${requiredValue} ${unit} מ${rule.listName}`;
       } else {
-        currentProgressString = `כלל 'minCoursesFromList' לא הוגדר כראוי (חסר listName, min, או שהרשימה לא קיימת).`;
+        currentProgressString = `כלל 'minCoursesFromList' לא הוגדר כראוי.`;
       }
       break;
+    }
 
-    case 'minCoursesFromMultipleLists':
+    case 'minCoursesFromMultipleLists': {
       if (rule.lists && Array.isArray(rule.lists) && degreeCourseLists) {
         let overallSatisfied = true;
         const progressStrings: string[] = [];
         const detailsArray: NonNullable<EvaluatedRuleStatus['listProgressDetails']> = [];
-        // Set single numeric values to null as they don't represent this combined rule
-        currentValue = null; 
-        requiredValue = null;
+        currentValuePlanned = null; // Not applicable for parent rule
+        currentValueDone = null;    // Not applicable for parent rule
+        requiredValue = null;     // Not applicable for parent rule
 
         rule.lists.forEach(listRule => {
           const { listName, min } = listRule;
-          let currentCompleted = 0;
+          let listCurrentPlanned = 0;
+          let listCurrentDone = 0;
           let listSatisfied = false;
-          let listProgressText = `${listName}: שגיאה`; // Default text in case of error
+          let listProgressText = `${listName}: שגיאה`;
           
           if (listName && min !== undefined && Array.isArray(degreeCourseLists[listName])) {
             const listCourseIds = degreeCourseLists[listName] as string[];
             const coursesFromListInPlan = coursesInPlan.filter(cp => listCourseIds.includes(cp._id));
-            currentCompleted = coursesFromListInPlan.length;
-            listSatisfied = currentCompleted >= min;
-            listProgressText = `${listName}: ${currentCompleted}/${min}`;
-            detailsArray.push({ listName, currentValue: currentCompleted, requiredValue: min, isSatisfied: listSatisfied });
+            listCurrentPlanned = coursesFromListInPlan.length;
+            listCurrentDone = coursesFromListInPlan.filter(cp => isCourseDone(cp._id)).length;
+            listSatisfied = listCurrentDone >= min;
+            listProgressText = `${listName}: ${listCurrentDone}/${min}`;
+            detailsArray.push({ listName, currentValuePlanned: listCurrentPlanned, currentValueDone: listCurrentDone, requiredValue: min, isSatisfied: listSatisfied });
           } else {
-            // Add detail with error state if list definition is problematic
-            detailsArray.push({ listName: listName || 'לא ידוע', currentValue: 0, requiredValue: min || 0, isSatisfied: false });
+            detailsArray.push({ listName: listName || 'לא ידוע', currentValuePlanned: 0, currentValueDone: 0, requiredValue: min || 0, isSatisfied: false });
             listSatisfied = false; 
           }
-          progressStrings.push(listProgressText); // Add text part for overall string
+          progressStrings.push(listProgressText);
           
           if (!listSatisfied) {
             overallSatisfied = false;
@@ -153,54 +195,22 @@ export function evaluateRule(
 
         currentProgressString = progressStrings.join(' | '); 
         isSatisfied = overallSatisfied;
-        listProgressDetails = detailsArray; // Assign the detailed array
-
+        listProgressDetails = detailsArray;
       } else {
-        currentProgressString = `כלל 'minCoursesFromMultipleLists' לא הוגדר כראוי (חסר 'lists').`;
+        currentProgressString = `כלל 'minCoursesFromMultipleLists' לא הוגדר כראוי.`;
       }
       break;
-
-    case 'minCreditsFromMandatory':
-      if (rule.min !== undefined && initialTemplateMandatoryCourseIds) {
-        const mandatoryCourseIds = new Set(initialTemplateMandatoryCourseIds);
-        const mandatoryCoursesActuallyInPlan = coursesInPlan.filter(cp => mandatoryCourseIds.has(cp._id));
-        currentValue = mandatoryCoursesActuallyInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
-        requiredValue = rule.min;
-        currentProgressString = `${currentValue}/${requiredValue} נק"ז (חובה)`;
-        isSatisfied = currentValue >= requiredValue;
-      } else {
-        currentProgressString = "כלל 'minCreditsFromMandatory' לא הוגדר כראוי (חסר 'min' או הגדרת קורסי חובה ראשונית).";
-      }
-      break;
-
-    case 'minCreditsFromAnySelectiveList':
-      if (rule.min !== undefined && degreeCourseLists) {
-        const selectiveCourseIds = new Set<string>();
-        Object.entries(degreeCourseLists).forEach(([, list]) => { // Ignore key
-          // Assuming actual lists are arrays of strings (course IDs) and ignoring others like 'must-take-min-num-of-courses'
-          if (Array.isArray(list) && list.every(item => typeof item === 'string')) {
-            (list as string[]).forEach(id => selectiveCourseIds.add(id));
-          }
-        });
-        const selectiveCoursesInPlan = coursesInPlan.filter(cp => selectiveCourseIds.has(cp._id));
-        currentValue = selectiveCoursesInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
-        requiredValue = rule.min;
-        currentProgressString = `${currentValue}/${requiredValue} נק"ז (בחירה)`;
-        isSatisfied = currentValue >= requiredValue;
-      } else {
-        currentProgressString = "כלל 'minCreditsFromAnySelectiveList' לא הוגדר כראוי.";
-      }
-      break;
-
-    case 'min_grade':
-      // This rule type implies checking if a minimum grade was achieved in specific courses or all courses.
-      // For simplicity, let's assume it means all courses in rule.courses_for_min_grade (if defined) must meet rule.min_grade_value.
-      // If rule.courses_for_min_grade is undefined, it might mean all courses in the plan (too broad for now).
+    }
+    
+    // --- Other Rule Types (Keep as is for now or adapt if needed) ---
+    case 'min_grade': {
+      // This rule checks grades of *done* courses. Logic likely remains the same.
       if (rule.min_grade_value !== undefined && rule.courses_for_min_grade && rule.courses_for_min_grade.length > 0) {
         let coursesChecked = 0;
         let coursesPassedMinGrade = 0;
         rule.courses_for_min_grade.forEach(courseIdToCheck => {
-          if (coursesInPlan.some(c => c._id === courseIdToCheck)) { // Check if course is in plan
+          // Only check if the course is actually DONE
+          if (isCourseDone(courseIdToCheck)) { 
             coursesChecked++;
             if (getNumericGrade(courseIdToCheck) >= (rule.min_grade_value || 0)) {
               coursesPassedMinGrade++;
@@ -208,17 +218,24 @@ export function evaluateRule(
           }
         });
         if (coursesChecked > 0) {
-          currentValue = coursesPassedMinGrade;
-          requiredValue = coursesChecked;
-          currentProgressString = `${currentValue}/${requiredValue} courses passed min grade ${rule.min_grade_value}`;
-          isSatisfied = currentValue === requiredValue;
+          // For this rule, currentValue represents passed count, not planned/done distinction
+          currentValuePlanned = coursesPassedMinGrade; 
+          currentValueDone = coursesPassedMinGrade;
+          requiredValue = coursesChecked; // Required is the number of *done* courses that should pass
+          currentProgressString = `${currentValueDone}/${requiredValue} עברו ציון ${rule.min_grade_value}`;
+          isSatisfied = currentValueDone === requiredValue;
         } else {
-          currentProgressString = `No specified courses for min grade found in plan.`;
+          currentProgressString = `אין קורסים רלוונטיים שהושלמו.`;
+          isSatisfied = true; // Arguably, if none are done, the condition isn't violated
+          currentValuePlanned = 0;
+          currentValueDone = 0;
+          requiredValue = 0;
         }        
       } else {
-        currentProgressString = `Min grade rule not fully specified.`;
+        currentProgressString = `כלל ציון מינימום לא הוגדר כראוי.`;
       }
       break;
+    }
 
     // TODO: Implement other rule types as needed (e.g., specific course completion, average grade rules)
     default:
@@ -226,5 +243,13 @@ export function evaluateRule(
       break;
   }
 
-  return { currentProgressString, isSatisfied, currentValue, requiredValue, listProgressDetails }; // Return new property
+  return { 
+    currentProgressString, 
+    isSatisfied, 
+    // currentValue: currentValueDone, // Keep this potentially for backward compat or simple displays? Or remove fully.
+    currentValuePlanned,
+    currentValueDone,
+    requiredValue, 
+    listProgressDetails 
+  }; 
 } 

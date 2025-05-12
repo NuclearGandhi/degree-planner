@@ -21,13 +21,15 @@ export interface RuleNodeData {
   description: string; // For single rules or the title of a consolidated rule group
   currentProgress: string; // Overall progress for single rules, or a summary for consolidated
   isSatisfied: boolean; // Overall satisfaction for single rules, or if all consolidated are met
-  currentValue?: number | null; // Relevant for single rules with a singular progress metric
+  currentValuePlanned?: number | null; // Relevant for single rules with a singular progress metric
+  currentValueDone?: number | null;    // Relevant for single rules with a singular progress metric
   requiredValue?: number | null; // Relevant for single rules with a singular progress metric
   
   // Details for 'minCoursesFromMultipleLists' or similar complex single rules
   listProgressDetails?: { 
     listName: string; 
-    currentValue: number; 
+    currentValuePlanned: number;
+    currentValueDone: number;
     requiredValue: number; 
     isSatisfied: boolean; 
   }[] | null;
@@ -38,7 +40,8 @@ export interface RuleNodeData {
     description: string; // Description of the individual sub-rule
     currentProgress: string; // Progress string of the sub-rule
     isSatisfied: boolean; // Satisfaction status of the sub-rule
-    currentValue?: number | null; // Current value for this sub-rule's progress
+    currentValuePlanned?: number | null;
+    currentValueDone?: number | null;
     requiredValue?: number | null; // Required value for this sub-rule
   }> | null;
 

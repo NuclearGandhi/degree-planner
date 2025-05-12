@@ -219,7 +219,8 @@ const transformDataToNodes = (
         description: rule.description,
         currentProgress: ruleStatus.currentProgressString,
         isSatisfied: ruleStatus.isSatisfied,
-        currentValue: ruleStatus.currentValue,
+        currentValuePlanned: ruleStatus.currentValuePlanned,
+        currentValueDone: ruleStatus.currentValueDone,
         requiredValue: ruleStatus.requiredValue,
         listProgressDetails: ruleStatus.listProgressDetails,
         onEditRule: onEditRuleCallback,
@@ -250,12 +251,13 @@ const transformDataToNodes = (
           template.semesters, template["courses-lists"], initialMandatoryCourseIds,
           classificationCheckedState, classificationCreditsState
         );
-        consolidatedRuleDetails!.push({
+        consolidatedRuleDetails.push({
           id: rule.id,
-          description: rule.description,
+          description: rule.description || `חוק ${rule.type}`,
           currentProgress: ruleStatus.currentProgressString,
           isSatisfied: ruleStatus.isSatisfied,
-          currentValue: ruleStatus.currentValue,
+          currentValuePlanned: ruleStatus.currentValuePlanned,
+          currentValueDone: ruleStatus.currentValueDone,
           requiredValue: ruleStatus.requiredValue,
         });
         if (!ruleStatus.isSatisfied) {
@@ -263,7 +265,7 @@ const transformDataToNodes = (
         }
       });
       
-      const estimatedHeightConsolidated = 60 + consolidatedRuleDetails!.length * 60;
+      const estimatedHeightConsolidated = 60 + consolidatedRuleDetails.length * 60;
       maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeightConsolidated);
 
       const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
@@ -274,7 +276,7 @@ const transformDataToNodes = (
         data: {
           id: consolidatedNodeId,
           description: "התקדמות אקדמית כללית",
-          currentProgress: `${consolidatedRuleDetails!.filter((r: NonNullable<RuleNodeData['consolidatedRules']>[number]) => r.isSatisfied).length} / ${consolidatedRuleDetails!.length} תתי-כללים הושלמו`,
+          currentProgress: `${consolidatedRuleDetails.filter((r: NonNullable<RuleNodeData['consolidatedRules']>[number]) => r.isSatisfied).length} / ${consolidatedRuleDetails.length} תתי-כללים הושלמו`,
           isSatisfied: allConsolidatedSatisfied,
           consolidatedRules: consolidatedRuleDetails,
           onEditRule: onEditRuleCallback,
