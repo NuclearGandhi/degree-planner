@@ -3,14 +3,14 @@ import { PrerequisiteItem, PrerequisiteGroup, RawCourseData } from '../types/dat
 // Helper to get the semester index (0-based) a course is in, or -1 if not found
 // IMPORTANT: This relies on the ORDER of semesters in Object.entries, which might not be guaranteed.
 // A more robust solution would involve parsing semester names or using numeric keys.
-const getSemesterIndex = (
-  courseId: string,
-  semesters: Record<string, string[]>
-): number => {
-  const entry = Object.entries(semesters).find(([, courses]) => courses.includes(courseId));
-  if (!entry) return -1; // Course not found
-  return Object.keys(semesters).findIndex(key => key === entry[0]);
-};
+// const getSemesterIndex = (
+//   courseId: string,
+//   semesters: Record<string, string[]>
+// ): number => {
+//   const entry = Object.entries(semesters).find(([, courses]) => courses.includes(courseId));
+//   if (!entry) return -1; // Course not found
+//   return Object.keys(semesters).findIndex(key => key === entry[0]);
+// };
 
 // Helper to get equivalent courses (including no_credit_courses)
 export const getEquivalentCourses = (courseId: string, allCoursesData: RawCourseData[]): Set<string> => {
@@ -64,7 +64,7 @@ export function checkPrerequisites(
 
   // Recursive helper function
   const checkGroup = (prereq: PrerequisiteItem | PrerequisiteGroup | SAPPrerequisiteGroup): boolean => {
-    if (typeof prereq === 'string') { // Base case: simple course ID (the prerequisite)
+    if (typeof prereq === 'string') { // Base case: simple course ID (the prerequisite being checked)
       // Check if this prerequisite is a classification course
       if (prereq === "01130013" || prereq === "01130014") {
         const isChecked = classificationChecked[prereq] || false;
@@ -74,21 +74,34 @@ export function checkPrerequisites(
         return isChecked;
       }
 
-      // Regular prerequisite course logic
-      const equivalentCourses = getEquivalentCourses(prereq, allCoursesData);
+      // Regular prerequisite course logic: Check if any course taken in an earlier semester
+      // satisfies this `prereq` (either directly or via its no_credit_courses).
       let met = false;
-      
-      for (const courseId of equivalentCourses) {
-        const prereqSemesterIndex = getSemesterIndex(courseId, templateSemesters);
-        // Prerequisite must be in a strictly earlier semester index
-        if (prereqSemesterIndex !== -1 && prereqSemesterIndex < targetSemesterIndexForComparison) {
-          met = true;
-          break;
+      const semesterKeys = Object.keys(templateSemesters);
+
+      for (let i = 0; i < semesterKeys.length; i++) {
+        const semesterKey = semesterKeys[i];
+        // The semester index of the courses being iterated over in the student's plan.
+        // Note: `getSemesterIndex` uses Object.entries and findIndex on keys, so this is effectively the same as `i`
+        // if semesterKeys are consistently ordered (which they should be if derived from template directly).
+        // For robustness, ensure `i` (the current loop index over sorted/defined keys) is used for comparison.
+        const currentSemesterPlanIndex = i; 
+
+        if (currentSemesterPlanIndex < targetSemesterIndexForComparison) {
+          const coursesInThisSemester = templateSemesters[semesterKey];
+          for (const placedCourseId of coursesInThisSemester) {
+            const equivalentsOfPlacedCourse = getEquivalentCourses(placedCourseId, allCoursesData);
+            if (equivalentsOfPlacedCourse.has(prereq)) {
+              met = true;
+              break; // Prereq met by this placedCourseId
+            }
+          }
         }
+        if (met) break; // Prereq met, no need to check further semesters
       }
       
       if (import.meta.env.DEV) {
-        console.debug(`  [checkPrerequisites] Prereq ${prereq} (and equivalents): met: ${met} (must be in semester < ${currentSemesterNumber})`);
+        console.debug(`  [checkPrerequisites] Prereq ${prereq}: met by a prior course (or its no_credit equivalent): ${met} (must be in semester < ${currentSemesterNumber})`);
       }
       return met;
     } else if (prereq && typeof prereq === 'object') {
