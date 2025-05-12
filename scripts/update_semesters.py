@@ -180,33 +180,43 @@ def build_course_map(courses, semester_label):
     return course_map
 
 # Updated merge_course_maps to iteratively merge a new semester's map into a base map
-def merge_course_maps(base_map, new_semester_map):
+def merge_course_maps(base_map, incoming_semester_map): # incoming_semester_map is from an OLDER semester than what might be in base_map
     """
-    Merges course data from new_semester_map into base_map.
-    If a course already exists in base_map, its 'semesters' list is updated.
-    Otherwise, the new course data is added to base_map.
-    Course details (name, credits, prereqTree, etc.) are taken from the first encounter.
+    Merges course data from incoming_semester_map into base_map.
+    base_map is populated by processing newer semesters first.
+    If a course from incoming_semester_map (older semester) is NOT in base_map,
+    it means this is its most recent offering found so far; its data is added.
+    If a course from incoming_semester_map IS in base_map, it means base_map
+    already has data from a NEWER semester. In this case, the newer details are kept,
+    and only the semester from incoming_semester_map is added to the list of semesters.
     """
-    for course_num, new_course_data in new_semester_map.items():
-        if course_num in base_map:
-            # Course exists, update its semesters list
-            if 'semesters' not in base_map[course_num] or not isinstance(base_map[course_num]['semesters'], list):
-                base_map[course_num]['semesters'] = [] # Initialize if missing or wrong type
-            
-            # Add new semester(s) from new_course_data and remove duplicates, then sort
-            # new_course_data['semesters'] is expected to be a list like [semester_label]
-            existing_semesters = set(base_map[course_num]['semesters'])
-            if 'semesters' in new_course_data and isinstance(new_course_data['semesters'], list):
-                new_semesters_to_add = set(new_course_data['semesters'])
-                existing_semesters.update(new_semesters_to_add)
-            base_map[course_num]['semesters'] = sorted(list(existing_semesters))
+    for course_num, incoming_course_data in incoming_semester_map.items():
+        # build_course_map ensures incoming_course_data['semesters'] is a list like [semester_label]
+        incoming_semester_label = incoming_course_data['semesters'][0]
+
+        if course_num not in base_map:
+            # This course hasn't been seen from any newer semester yet.
+            # So, this incoming_course_data is the newest version we have for it. Add it directly.
+            base_map[course_num] = incoming_course_data
         else:
-            # New course, add it to the base_map
-            base_map[course_num] = new_course_data
-            # Ensure 'semesters' list exists, even if it's initialized from new_course_data
+            # Course is already in base_map, meaning we have its data from a newer semester.
+            # Preserve the existing (newer) course details in base_map[course_num].
+            # Only add the semester from this incoming_course_data (older semester) to its list.
+            
+            # Ensure 'semesters' list exists and is a list in the base_map entry.
             if 'semesters' not in base_map[course_num] or not isinstance(base_map[course_num]['semesters'], list):
-                 base_map[course_num]['semesters'] = [] # Should be set by build_course_map but as a safeguard
-    return base_map # Returns the modified base_map
+                # This should ideally not happen if base_map entries are always well-formed.
+                # If it's missing, initialize it before appending.
+                base_map[course_num]['semesters'] = [] 
+            
+            if incoming_semester_label not in base_map[course_num]['semesters']:
+                base_map[course_num]['semesters'].append(incoming_semester_label)
+            
+            # Keep the list of semesters sorted for consistency.
+            # Sorting alphabetically by Hebrew name (e.g., אביב, חורף, קיץ)
+            base_map[course_num]['semesters'] = sorted(list(set(base_map[course_num]['semesters'])))
+            
+    return base_map
 
 def main():
     last_semesters = get_last_semesters() # Dict: {"YYYYSS": {"start": ..., "end": ...}}
@@ -227,9 +237,10 @@ def main():
 
     # Sort semester keys to process them chronologically (e.g., "202201", "202202", "202301")
     # This ensures that course data is taken from the earliest available semester.
-    sorted_semester_keys = sorted(last_semesters.keys())
+    # UPDATED: Sort reverse chronologically (newest first) to get latest course data.
+    sorted_semester_keys = sorted(last_semesters.keys(), reverse=True)
 
-    print(f"Found {len(sorted_semester_keys)} semesters to process.")
+    print(f"Found {len(sorted_semester_keys)} semesters to process (newest first).")
 
     for semester_key in sorted_semester_keys: # semester_key is "YYYYSS"
         print(f"Processing semester: {semester_key}...")
