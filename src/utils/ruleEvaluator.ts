@@ -26,6 +26,7 @@ export function evaluateRule(
   rule: DegreeRule,
   coursesInPlan: RawCourseData[], // List of RawCourseData objects currently in the student's plan
   grades: Record<string, string>, // courseId: grade string
+  binaryStates: Record<string, boolean>, // ADDED: courseId: isBinary status
   allCoursesData: RawCourseData[], // All available course data (for looking up details of courses in lists)
   templateSemesters: Record<string, string[]>, // Mandatory courses from template (CURRENTLY LIVE SEMESTERS, used by other rules perhaps)
   degreeCourseLists?: Record<string, string[] | number[]>, // Adjusted type
@@ -41,10 +42,12 @@ export function evaluateRule(
   let requiredValue: number | null = null;
   let listProgressDetails: EvaluatedRuleStatus['listProgressDetails'] = null;
 
-  // Helper to check if a course is considered "done" (has a non-empty grade)
+  // Helper to check if a course is considered "done" (has a non-empty grade OR is marked as binary)
   const isCourseDone = (courseId: string): boolean => {
     const gradeStr = grades[courseId];
-    return !!gradeStr && gradeStr.trim() !== '';
+    const isBinary = binaryStates[courseId] === true; // Check if binary flag is explicitly true
+    const hasGrade = !!gradeStr && gradeStr.trim() !== '';
+    return hasGrade || isBinary; // Course is done if it has a grade OR is marked as binary
   };
 
   // Helper to parse grade string to number, handling non-numeric/empty as 0 or NaN for checks

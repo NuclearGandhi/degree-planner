@@ -4,12 +4,9 @@ import {
   ReactFlowProvider,
   Controls,
   Background,
-  // MiniMap, // Commented out as it's no longer used
   useNodesState,
   useEdgesState,
-  // addEdge, // Removed as onConnect is commented out
   BackgroundVariant,
-  // Connection, // Removed as onConnect is commented out
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -22,7 +19,7 @@ import SemesterTitleNode from './customNodes/SemesterTitleNode';
 import { CourseSelectionModal } from '../../components/ui/CourseSelectionModal';
 import { fetchAllCourses, fetchDegreeTemplates } from '../../utils/dataLoader';
 import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, PrerequisiteGroup, DegreesFileStructure } from '../../types/data';
-import { AppNode, AppEdge, RuleNodeData } from '../../types/flow';
+import { AppNode, AppEdge, RuleNodeData, CourseNodeData } from '../../types/flow';
 import { evaluateRule } from '../../utils/ruleEvaluator';
 import { AveragesDisplay } from '../../components/ui/AveragesDisplay';
 import { savePlan, loadPlan } from '../../utils/planStorage';
@@ -35,7 +32,6 @@ import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
 import { Logo } from '../../components/ui/Logo';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
 import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
-import { CourseNodeData } from '../../types/flow';
 
 const nodeTypes = {
   course: CourseNode,
@@ -47,7 +43,6 @@ const nodeTypes = {
 
 const COLUMN_WIDTH = 340; // Increased from 300
 const NODE_HEIGHT_COURSE = 90; // Increased approximate height of a course node
-// const NODE_HEIGHT_RULE = 70; // No longer used directly, height is estimated
 const VERTICAL_SPACING_RULE = 60; // Further increased vertical spacing, was 40
 const HORIZONTAL_SPACING_SEMESTER = 75; // New: Spacing between semester columns
 const SEMESTER_TOP_MARGIN = 120; // Increased from 100
@@ -71,8 +66,8 @@ const initialClassificationCheckedState: Record<string, boolean> = {};
 const transformDataToNodes = (
   template: DegreeTemplate | undefined,
   allCourses: RawCourseData[],
-  grades: Record<string, string>,
-  currentNodes: AppNode[],
+  currentGrades: Record<string, string>,
+  currentBinaryStates: Record<string, boolean>,
   handleBinaryChange: (courseId: string, isBinary: boolean) => void,
   onAddCourseToSemesterCallback: (semesterNumber: number) => void,
   onAddSemesterCallbackParam: () => void,
@@ -189,7 +184,6 @@ const transformDataToNodes = (
   }
 
   // 2. Process Other Template-Specific Rules (e.g., minCoursesFromMultipleLists)
-  // This section is MOVED UP to be processed before the Consolidated Rule Node.
   const otherRules = template.rules!.filter(rule => {
     const consolidatedRuleTypes = new Set([
       'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
@@ -200,7 +194,9 @@ const transformDataToNodes = (
 
   otherRules.forEach((rule) => {
     const ruleStatus = evaluateRule(
-      rule, coursesInCurrentPlan, grades, allCourses,
+      rule, coursesInCurrentPlan, currentGrades, 
+      currentBinaryStates,
+      allCourses, 
       template.semesters, template["courses-lists"], initialMandatoryCourseIds,
       classificationCheckedState, classificationCreditsState
     );
@@ -250,7 +246,9 @@ const transformDataToNodes = (
 
       rulesToConsolidate.forEach(rule => {
         const ruleStatus = evaluateRule(
-          rule, coursesInCurrentPlan, grades, allCourses,
+          rule, coursesInCurrentPlan, currentGrades, 
+          currentBinaryStates,
+          allCourses, 
           template.semesters, template["courses-lists"], initialMandatoryCourseIds,
           classificationCheckedState, classificationCreditsState
         );
@@ -291,14 +289,6 @@ const transformDataToNodes = (
   }
 
   currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
-
-  // Create map of isBinary states from currentNodes
-  const currentBinaryStates = currentNodes.reduce((acc, node) => {
-    if (node.type === 'course' && node.data.courseId) {
-      acc[node.data.courseId] = node.data.isBinary || false;
-    }
-    return acc;
-  }, {} as Record<string, boolean>);
 
   // Semester Title and Course Node Generation (uses the calculated currentContentY)
   semesterEntries.forEach(([semesterName, courseIds], semesterIndex) => {
@@ -345,19 +335,19 @@ const transformDataToNodes = (
         label: courseData.name || courseId,
         courseId: courseData._id,
         credits: courseData.credits !== undefined ? courseData.credits : 'N/A',
-        grade: grades[courseId] || '',
+        grade: currentGrades[courseId] || '',
         onGradeChange: onGradeChangeCallback,
         onRemoveCourse: onRemoveCourseCallback,
         prerequisitesMet: prereqsMet,
-        isBinary: currentBinaryStates[courseId] || false, // Set isBinary from map
-        onBinaryChange: handleBinaryChange, // Pass the handler
+        isBinary: currentBinaryStates[courseId] || false,
+        onBinaryChange: handleBinaryChange,
       };
 
       flowNodes.push({
         id: nodeId,
         type: 'course',
         position: nodePosition,
-        data: courseNodeData, // Use the typed data object
+        data: courseNodeData,
       });
       currentYInSemester += NODE_HEIGHT_COURSE + VERTICAL_SPACING_RULE;
     });
@@ -460,11 +450,12 @@ const transformDataToEdges = (
 
 function DegreePlanView() {
   const { theme } = useTheme();
-  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode[]>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge[]>([]);
+  const [grades, setGrades] = useState<Record<string, string>>({});
+  const [binaryStates, setBinaryStates] = useState<Record<string, boolean>>({});
   const [allCoursesData, setAllCoursesData] = useState<RawCourseData[]>([]);
   const [degreeTemplate, setDegreeTemplate] = useState<DegreeTemplate | undefined>(undefined);
-  const [grades, setGrades] = useState<Record<string, string>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [semesterToAddCourseTo, setSemesterToAddCourseTo] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -472,27 +463,21 @@ function DegreePlanView() {
   const [editingRule, setEditingRule] = useState<DegreeRule | null>(null);
   const [isRuleEditorOpen, setIsRuleEditorOpen] = useState(false);
   const [isCourseListEditorOpen, setIsCourseListEditorOpen] = useState(false);
-  // const reactFlowWrapper = useRef<HTMLDivElement>(null); // Commented out - unused
   const [isConsolidatedRuleEditorOpen, setIsConsolidatedRuleEditorOpen] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState<AppNode[]>([]);
-  // State for consolidated rule editing (was missing)
   const [rulesForConsolidatedEditing, setRulesForConsolidatedEditing] = useState<DegreeRule[]>([]);
-  const [currentGlobalRules, setCurrentGlobalRules] = useState<DegreeRule[]>([]); // New state for global rules
+  const [currentGlobalRules, setCurrentGlobalRules] = useState<DegreeRule[]>([]);
 
-  // Moved isLoading, setIsLoading, and autosaveTimeoutRef to the top with other hooks
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const autosaveTimeoutRef = useRef<number | null>(null);
-  // const idleTimeoutRef = useRef<number | null>(null); // No longer needed for persistent 'saved' state
   const classificationCreditsDebounceTimeoutRef = useRef<number | null>(null);
 
-  // NEW STATE and HANDLER for classification checkboxes
   const [classificationChecked, setClassificationChecked] = useState<Record<string, boolean>>(initialClassificationCheckedState);
   const [classificationCredits, setClassificationCredits] = useState<Record<string, number>>({});
 
   const handleClassificationToggle = useCallback((courseId: string) => {
     setClassificationChecked(prev => {
       const newState = { ...prev, [courseId]: !prev[courseId] };
-      // If 'miluim_exemption' is being unchecked, reset its credits
       if (courseId === 'miluim_exemption' && !newState[courseId]) {
         setClassificationCredits(creditPrev => ({ ...creditPrev, [courseId]: 0 }));
       }
@@ -501,18 +486,15 @@ function DegreePlanView() {
   }, []);
 
   const handleClassificationCreditsChange = useCallback((courseId: string, credits: number) => {
-    // Clear any existing timeout to reset the debounce timer
     if (classificationCreditsDebounceTimeoutRef.current) {
       clearTimeout(classificationCreditsDebounceTimeoutRef.current);
     }
 
-    // Set a new timeout to update the state after a delay
     classificationCreditsDebounceTimeoutRef.current = window.setTimeout(() => {
       setClassificationCredits(prev => ({ ...prev, [courseId]: credits }));
-    }, 100); // 400ms debounce delay
+    }, 100);
   }, []);
 
-  // Derived state for courses in plan to pass to modal
   const coursesInPlanFlatIds = useMemo(() => {
     if (!degreeTemplate || !degreeTemplate.semesters) return new Set<string>();
     return new Set(Object.values(degreeTemplate.semesters).flat().filter(id => typeof id === 'string')) as Set<string>;
@@ -521,12 +503,10 @@ function DegreePlanView() {
   const initialMandatoryCourseIds = useMemo(() => {
     if (!degreeTemplate) return undefined;
 
-    // Prioritize explicitly defined mandatory courses
     if (Array.isArray(degreeTemplate.definedMandatoryCourseIds) && degreeTemplate.definedMandatoryCourseIds.length > 0) {
       return degreeTemplate.definedMandatoryCourseIds;
     }
 
-    // Fallback: Derive from all courses listed in semesters if not explicitly defined
     if (typeof degreeTemplate.semesters === 'object' && degreeTemplate.semesters !== null) {
       const allSemesterCourses = Object.values(degreeTemplate.semesters).flat().filter(id => typeof id === 'string');
       if (allSemesterCourses.length > 0) {
@@ -534,7 +514,7 @@ function DegreePlanView() {
       }
     }
     
-    return undefined; // Return undefined if no mandatory courses can be determined
+    return undefined;
   }, [degreeTemplate]);
 
   const handleAddCourseToSemesterCallback = useCallback((semesterNumber: number) => {
@@ -546,7 +526,7 @@ function DegreePlanView() {
   const handleAddSemesterCallback = useCallback(() => {
     console.log('DegreePlanView: Add new semester');
     setDegreeTemplate(prevTemplate => {
-      if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate; // Guard clause
+      if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate;
       const semesterKeys = Object.keys(prevTemplate.semesters);
       if (semesterKeys.length >= MAX_SEMESTERS) return prevTemplate;
 
@@ -557,7 +537,7 @@ function DegreePlanView() {
         ...prevTemplate,
         semesters: {
           ...prevTemplate.semesters,
-          [nextSemesterName]: [] // Add new semester entry
+          [nextSemesterName]: []
         }
       };
     });
@@ -570,13 +550,12 @@ function DegreePlanView() {
       if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate;
 
       const semesterEntries = Object.entries(prevTemplate.semesters);
-      // semesterToAddCourseTo is 1-based
       if (semesterToAddCourseTo <= 0 || semesterToAddCourseTo > semesterEntries.length) {
         console.warn(`Invalid semesterToAddCourseTo: ${semesterToAddCourseTo}, current semester count: ${semesterEntries.length}`);
         return prevTemplate;
       }
 
-      const targetSemesterKey = semesterEntries[semesterToAddCourseTo - 1][0]; // Get the key of the target semester
+      const targetSemesterKey = semesterEntries[semesterToAddCourseTo - 1][0];
 
       const updatedSemesters = { ...prevTemplate.semesters };
       const currentCoursesInTargetSemester = updatedSemesters[targetSemesterKey] || [];
@@ -599,28 +578,29 @@ function DegreePlanView() {
   }, []);
 
   const handleGradeChange = useCallback((courseId: string, grade: string) => {
-    setGrades(prevGrades => ({ ...prevGrades, [courseId]: grade }));
+    setGrades((prevGrades: Record<string, string>) => ({ ...prevGrades, [courseId]: grade }));
     if (grade !== '') {
-      setNodes(nds => nds.map(node => 
-        (node.type === 'course' && node.data.courseId === courseId && node.data.isBinary) 
-          ? { ...node, data: { ...node.data, isBinary: false } } 
-          : node
-      ));
+      setBinaryStates((prevStates: Record<string, boolean>) => {
+        if (prevStates[courseId]) { 
+          const newStates = { ...prevStates };
+          newStates[courseId] = false; 
+          return newStates;
+        }
+        return prevStates; 
+      });
     }
-  }, [setGrades, setNodes]);
+  }, [setGrades, setBinaryStates]);
 
   const handleBinaryChange = useCallback((courseId: string, isBinary: boolean) => {
-    setNodes(nds => nds.map(node =>
-      (node.type === 'course' && node.data.courseId === courseId)
-        ? { ...node, data: { ...node.data, isBinary: isBinary } }
-        : node
-    ));
+    setBinaryStates((prevStates: Record<string, boolean>) => ({ ...prevStates, [courseId]: isBinary }));
     if (isBinary) {
-      setGrades(prevGrades => ({ ...prevGrades, [courseId]: '' }));
+      setGrades((prevGrades: Record<string, string>) => ({
+        ...prevGrades,
+        [courseId]: '', 
+      }));
     }
-  }, [setNodes, setGrades]);
+  }, [setBinaryStates, setGrades]);
 
-  // Callback for handling course removal
   const handleRemoveCourseCallback = useCallback((courseIdToRemove: string) => {
     console.log(`DegreePlanView: Remove course: ${courseIdToRemove}`);
     setDegreeTemplate(prevTemplate => {
@@ -632,18 +612,14 @@ function DegreePlanView() {
       }
       return { ...prevTemplate, semesters: updatedSemesters };
     });
-    // Also remove grade entry if it exists
     setGrades(prevGrades => {
       const newGrades = { ...prevGrades };
       delete newGrades[courseIdToRemove];
       return newGrades;
     });
-    // Clear selection if the removed node was selected
-    setSelectedNodes(prevSelected => prevSelected.filter(node => node.id !== courseIdToRemove)); 
-    // Alternatively, to clear all selection: setSelectedNodes([]);
-  }, [setDegreeTemplate, setGrades, setSelectedNodes]); // Added setSelectedNodes to dependencies
+    setSelectedNodes(prevSelected => prevSelected.filter(node => node.id !== courseIdToRemove));
+  }, [setDegreeTemplate, setGrades, setSelectedNodes]);
 
-  // Node double-click handler
   const handleNodeDoubleClick = useCallback((_event: React.MouseEvent, node: AppNode) => {
     console.log('[DegreePlanView] handleNodeDoubleClick called with node:', node);
     if (node.type === 'course' && node.data) {
@@ -651,7 +627,6 @@ function DegreePlanView() {
       const foundCourse = allCoursesData.find(c => c._id === courseId);
       if (foundCourse) {
         setCourseDetailModalData({ course: foundCourse, coursesInPlanIds: coursesInPlanFlatIds });
-        // setIsCourseDetailModalOpen(true); // Removed, covered by setCourseDetailModalData
       }
     }
     if (node.type === 'rule' && node.data && node.data.id) {
@@ -675,13 +650,12 @@ function DegreePlanView() {
         }
       }
     }
-  }, [allCoursesData, coursesInPlanFlatIds, degreeTemplate, /* setIsCourseDetailModalOpen, */ setCourseDetailModalData, setEditingRule, setIsRuleEditorOpen, setRulesForConsolidatedEditing, setIsConsolidatedRuleEditorOpen]);
+  }, [allCoursesData, coursesInPlanFlatIds, degreeTemplate, setCourseDetailModalData, setEditingRule, setIsRuleEditorOpen, setRulesForConsolidatedEditing, setIsConsolidatedRuleEditorOpen]);
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: AppNode) => {
     console.log('[DegreePlanView] handleNodeClick called with node:', node);
   }, []);
 
-  // Rule Editor Handlers
   const handleCloseRuleEditor = useCallback(() => {
     setEditingRule(null);
     setIsRuleEditorOpen(false);
@@ -705,30 +679,24 @@ function DegreePlanView() {
     }
   }, [setDegreeTemplate]);
 
-  // Callback for Course List Editor Modal
   const handleToggleCourseListEditorModal = useCallback(() => {
     setIsCourseListEditorOpen(prev => !prev);
   }, []);
 
-  // Callback for saving updated course lists
   const handleSaveCourseLists = useCallback((allListsFromModal: Record<string, string[]>) => {
     setDegreeTemplate(prevTemplate => {
       if (!prevTemplate) return undefined;
 
-      // Handle the mandatory courses list
       const newDefinedMandatoryCourseIds = allListsFromModal[MANDATORY_COURSES_LIST_KEY] !== undefined
         ? allListsFromModal[MANDATORY_COURSES_LIST_KEY]
-        : prevTemplate.definedMandatoryCourseIds; // Fallback if key somehow missing
+        : prevTemplate.definedMandatoryCourseIds;
 
-      // Rebuild the custom courses-lists object from what's in the modal
       const newCustomCoursesLists: Record<string, string[]> = {};
       for (const listName in allListsFromModal) {
         if (listName !== MANDATORY_COURSES_LIST_KEY) {
-          // Only add non-empty lists to the final custom lists
           if (allListsFromModal[listName] && allListsFromModal[listName].length > 0) {
             newCustomCoursesLists[listName] = allListsFromModal[listName];
           }
-          // If a list was emptied in the modal, it won't be added here, effectively deleting it from "courses-lists".
         }
       }
 
@@ -738,10 +706,9 @@ function DegreePlanView() {
         "courses-lists": newCustomCoursesLists,
       };
     });
-    setIsCourseListEditorOpen(false); // Explicitly close modal here
+    setIsCourseListEditorOpen(false);
   }, [setDegreeTemplate, setIsCourseListEditorOpen]);
 
-  // Callback for editing consolidated rules
   const handleEditRule = useCallback((ruleId: string) => {
     if (!degreeTemplate || !degreeTemplate.rules) return;
 
@@ -768,7 +735,6 @@ function DegreePlanView() {
     }
   }, [degreeTemplate]);
 
-  // Callback for saving consolidated rules
   const handleSaveConsolidatedRules = useCallback((updatedRules: DegreeRule[]) => {
     if (!degreeTemplate || !degreeTemplate.rules) return;
 
@@ -783,7 +749,6 @@ function DegreePlanView() {
     setRulesForConsolidatedEditing([]);
   }, [degreeTemplate]);
 
-  // Autosave Effect
   useEffect(() => {
     if (isLoading || !degreeTemplate) {
       return;
@@ -792,38 +757,26 @@ function DegreePlanView() {
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current);
     }
-    // if (idleTimeoutRef.current) { // No longer needed
-    //   clearTimeout(idleTimeoutRef.current);
-    // }
 
     setSaveStatus('saving');
 
     autosaveTimeoutRef.current = window.setTimeout(() => {
       console.log("[DegreePlanView] Autosaving plan...");
-      savePlan(degreeTemplate, grades, classificationChecked, classificationCredits);
-      setSaveStatus('saved'); // Stays 'saved' until next change
-
-      // No longer setting a timeout to go back to idle
-      // idleTimeoutRef.current = window.setTimeout(() => {
-      //   setSaveStatus('idle');
-      // }, 3000);
+      savePlan(degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates);
+      setSaveStatus('saved');
     }, 1500);
 
     return () => {
       if (autosaveTimeoutRef.current) {
         clearTimeout(autosaveTimeoutRef.current);
       }
-      // if (idleTimeoutRef.current) { // No longer needed
-      //   clearTimeout(idleTimeoutRef.current);
-      // }
     };
-  }, [degreeTemplate, grades, classificationChecked, classificationCredits, isLoading]);
+  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, isLoading]);
 
-  // Initial Data Load Effect
   useEffect(() => {
     const loadInitialData = async () => {
       console.log("[DegreePlanView] Initial Load: Starting data fetch and plan load.");
-      setIsLoading(true); // Set loading true at the start
+      setIsLoading(true);
       try {
         const courses = await fetchAllCourses();
         console.log("[DegreePlanView] Initial Load: Fetched allCourses:", courses);
@@ -833,25 +786,23 @@ function DegreePlanView() {
         let templateForProcessing: DegreeTemplate | undefined = undefined;
         let globalRulesForProcessing: DegreeRule[] = [];
         let gradesForProcessing: Record<string, string> = {};
-        let classificationCheckedForProcessing: Record<string, boolean> = {}; // Initialize
-        let classificationCreditsForProcessing: Record<string, number> = {}; // Initialize
+        let classificationCheckedForProcessing: Record<string, boolean> = {};
+        let classificationCreditsForProcessing: Record<string, number> = {};
+        let binaryStatesForProcessing: Record<string, boolean> = {};
 
         const savedPlanData = loadPlan();
         if (savedPlanData) {
           console.log("[DegreePlanView] Initial Load: Found saved plan.", savedPlanData);
-          // Saved plan only contains the specific template, global rules are re-fetched
           templateForProcessing = savedPlanData.template;
           gradesForProcessing = savedPlanData.grades || {};
           classificationCheckedForProcessing = savedPlanData.classificationChecked || {};
           classificationCreditsForProcessing = savedPlanData.classificationCredits || {};
+          binaryStatesForProcessing = savedPlanData.binaryStates || {};
 
-          // Fetch all degree data to get global rules, even when loading a saved plan
           fetchedDegreeFileData = await fetchDegreeTemplates();
           globalRulesForProcessing = fetchedDegreeFileData?.globalRules || [];
 
-          // Restore initial mandatory courses from the saved template if they exist
           if (savedPlanData.template?.definedMandatoryCourseIds) {
-            // setInitialMandatoryCourses(savedPlanData.template.definedMandatoryCourseIds); // Commented out
           }
         } else {
           console.log("[DegreePlanView] Initial Load: No saved plan found, fetching default template and global rules.");
@@ -859,46 +810,36 @@ function DegreePlanView() {
           const defaultTemplateId = 'mechanical-engineering-general'; 
           templateForProcessing = fetchedDegreeFileData[defaultTemplateId] as DegreeTemplate | undefined;
           globalRulesForProcessing = fetchedDegreeFileData?.globalRules || [];
+          binaryStatesForProcessing = {};
           
           if (templateForProcessing?.definedMandatoryCourseIds) {
-            // setInitialMandatoryCourses(templateForProcessing.definedMandatoryCourseIds); // Commented out
           } else if (templateForProcessing) {
-            // Fallback: if definedMandatoryCourseIds is not present, derive from semesters
-            // const mandatoryIds = Object.values(templateForProcessing.semesters || {}).flat(); // Commented out - unused
-            // setInitialMandatoryCourses(mandatoryIds); // Commented out
-            // Optionally, add it to the template for future saves if this logic is desired persist
-            // templateForProcessing.definedMandatoryCourseIds = mandatoryIds; 
           }
         }
 
         if (templateForProcessing) {
           console.log("[DegreePlanView] Initial Load: Setting degree template:", templateForProcessing);
           setDegreeTemplate(templateForProcessing);
-          setCurrentGlobalRules(globalRulesForProcessing); // Set global rules
+          setCurrentGlobalRules(globalRulesForProcessing);
           setGrades(gradesForProcessing);
           setClassificationChecked(classificationCheckedForProcessing);
           setClassificationCredits(classificationCreditsForProcessing);
+          setBinaryStates(binaryStatesForProcessing);
         } else {
           console.error("[DegreePlanView] Initial Load: No template could be loaded (neither saved nor default).");
-          // Handle error case: set some default empty state or show error message
         }
       } catch (error) {
         console.error("[DegreePlanView] Initial Load: Error loading initial data:", error);
-        // Handle error appropriately
       } finally {
         console.log("[DegreePlanView] Initial Load: Finished. Setting isLoading to false.");
-        setIsLoading(false); // Set loading to false after all operations
+        setIsLoading(false);
       }
     };
 
     loadInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, []); // Runs once on mount
+  }, []);
 
-  // New useEffect for styling edges based on selection
   useEffect(() => {
-    // if (!edges.length && selectedNodes.length === 0) return; 
-
     const actualSelectedCourseNode = selectedNodes.find(n => n.type === 'course');
 
     if (actualSelectedCourseNode) {
@@ -934,7 +875,6 @@ function DegreePlanView() {
     }
   }, [selectedNodes, setEdges]);
 
-  // useEffect to update nodes/edges when data changes (MAIN EFFECT)
   useEffect(() => {
     console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. Dependencies changed.");
     console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", degreeTemplate, "allCourses count:", Array.isArray(allCoursesData) ? allCoursesData.length : 'not an array');
@@ -945,7 +885,6 @@ function DegreePlanView() {
       if (!degreeTemplate) console.log("Reason: currentTemplate is falsy.");
       if (!Array.isArray(allCoursesData)) console.log("Reason: allCourses is not an array.");
       if (Array.isArray(allCoursesData) && allCoursesData.length === 0) console.log("Reason: allCourses is an empty array.");
-      // Optionally, if nodes are empty and not loading, set them to empty to clear previous state
       if (!isLoading && nodes.length > 0) {
          console.log("[DegreePlanView] Node/Edge Update Effect: Clearing existing nodes as conditions not met.");
          setNodes([]);
@@ -959,7 +898,7 @@ function DegreePlanView() {
       degreeTemplate,
       allCoursesData,
       grades, 
-      nodes, // Pass current nodes state (needed to read isBinary)
+      binaryStates,
       handleBinaryChange, 
       handleAddCourseToSemesterCallback, 
       handleAddSemesterCallback,
@@ -977,69 +916,46 @@ function DegreePlanView() {
     const newEdges = transformDataToEdges(degreeTemplate, allCoursesData);
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
     
-    // Simple comparison to prevent unnecessary updates if structure hasn't changed
-    // Note: JSON.stringify can be inefficient for large states. Consider more sophisticated checks if performance becomes an issue.
-    const nodesChanged = JSON.stringify(newNodes) !== JSON.stringify(nodes);
-    const edgesChanged = JSON.stringify(newEdges) !== JSON.stringify(edges);
-
-    if (nodesChanged) {
-      console.log("[DegreePlanView] Node/Edge Update Effect: Applying node updates.");
-      setNodes(newNodes);
-    }
-    if (edgesChanged) {
-      console.log("[DegreePlanView] Node/Edge Update Effect: Applying edge updates.");
-      setEdges(newEdges);
-    }
-
+    setNodes((_prevNodes: AppNode[]) => newNodes);
+    setEdges((_prevEdges: AppEdge[]) => newEdges);
   }, [
-    // CORE DATA DEPENDENCIES:
-    degreeTemplate, allCoursesData, grades, classificationChecked, 
+    degreeTemplate, allCoursesData, grades, binaryStates, classificationChecked, 
     classificationCredits, currentGlobalRules, initialMandatoryCourseIds,
-    // CALLBACK DEPENDENCIES (should be stable via useCallback):
     handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChange, 
     handleRemoveCourseCallback, handleBinaryChange, handleClassificationToggle, 
     handleClassificationCreditsChange, handleEditRule, handleDeleteRule,
-    // STABLE STATE SETTERS & VALUES:
     setNodes, setEdges, isLoading 
-    // *** REMOVED 'nodes' and 'edges' from dependencies ***
   ]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
     setSelectedNodes(selNodes);
   }, []);
 
-  // Filter courses for modal: exclude those already in the current plan AND classification courses
   const availableCoursesForModal = useMemo(() => {
     if (!degreeTemplate || typeof degreeTemplate.semesters !== 'object' || degreeTemplate.semesters === null || !Array.isArray(allCoursesData)) {
       if (degreeTemplate && (typeof degreeTemplate.semesters !== 'object' || degreeTemplate.semesters === null)) {
         console.warn('Data Structure Warning (availableCoursesForModal): currentTemplate.semesters is not an object!', degreeTemplate.semesters);
       }
-      // Filter out classification courses even if other checks fail, provided allCoursesData is an array
       return Array.isArray(allCoursesData) ? allCoursesData.filter(course => !course.isClassificationCourse) : [];
     }
     const coursesInPlan = new Set<string>();
     Object.values(degreeTemplate.semesters).forEach(semesterCourseList => {
       semesterCourseList.forEach(id => coursesInPlan.add(id));
     });
-    // Filter out courses already in plan AND classification courses
     return allCoursesData.filter(course => !coursesInPlan.has(course._id) && !course.isClassificationCourse);
   }, [allCoursesData, degreeTemplate]);
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <div className="fixed top-4 left-4 z-50 flex flex-row-reverse items-center gap-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
-        {/* Leftmost: Logo (no shadow) */}
         <Logo />
-        {/* Theme Toggle */}
         <ThemeToggleButton />
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
-        {/* Save Status */}
         <div className="flex items-center justify-center min-w-[50px] text-center">
           {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}
           {saveStatus === 'saved' && <span className="text-xs text-green-600 dark:text-green-400 p-1 bg-green-100 dark:bg-green-800 rounded">נשמר ✓</span>}
         </div>
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
-        {/* Rightmost: Edit Course List Button */}
         <button 
           onClick={handleToggleCourseListEditorModal}
           className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
@@ -1066,7 +982,6 @@ function DegreePlanView() {
           onNodeClick={handleNodeClick}
         >
           <Controls />
-          {/* <MiniMap /> */}
           <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
         </ReactFlow>
       </ReactFlowProvider>
@@ -1079,12 +994,11 @@ function DegreePlanView() {
       />
       {courseDetailModalData && courseDetailModalData.course && (
         <CourseDetailModal
-          isOpen={!!courseDetailModalData} // Changed from isCourseDetailModalOpen
+          isOpen={!!courseDetailModalData}
           onClose={() => {
-            // setIsCourseDetailModalOpen(false); // Removed, covered by setCourseDetailModalData(null)
-            setCourseDetailModalData(null); // Clear the whole object
+            setCourseDetailModalData(null);
           }}
-          course={courseDetailModalData.course} // This is now guaranteed to be RawCourseData
+          course={courseDetailModalData.course}
           allCourses={allCoursesData}
           coursesInPlanIds={courseDetailModalData.coursesInPlanIds}
         />
@@ -1102,17 +1016,13 @@ function DegreePlanView() {
         allCourses={allCoursesData}
         currentCourseLists={useMemo(() => {
           const lists = { ...(degreeTemplate?.["courses-lists"] || {}) };
-          // Add the definedMandatoryCourseIds as a special list for the editor
           if (degreeTemplate && degreeTemplate.definedMandatoryCourseIds) {
             lists[MANDATORY_COURSES_LIST_KEY] = [...new Set(degreeTemplate.definedMandatoryCourseIds)];
           } else if (degreeTemplate && typeof degreeTemplate.semesters === 'object' && degreeTemplate.semesters !== null) {
-            // Fallback for older data or if definedMandatoryCourseIds is somehow not set yet:
-            // show current semester courses, but saving will create/update definedMandatoryCourseIds
-            // This also ensures the list is shown even if definedMandatoryCourseIds is empty initially
              const allMandatoryIdsFromSemesters = [...new Set(Object.values(degreeTemplate.semesters).flat())];
              lists[MANDATORY_COURSES_LIST_KEY] = allMandatoryIdsFromSemesters;
           } else {
-            lists[MANDATORY_COURSES_LIST_KEY] = []; // Ensure the key exists for the modal
+            lists[MANDATORY_COURSES_LIST_KEY] = [];
           }
           return lists;
         }, [degreeTemplate])}
