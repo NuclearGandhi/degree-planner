@@ -1,8 +1,10 @@
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, useState } from 'react';
 import { Handle, Position, NodeProps, Node as RFNode } from '@xyflow/react';
 import { CourseNodeData } from '../../../types/flow';
 
 const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeData, 'course'>>) => {
+  const [showPrereqTooltip, setShowPrereqTooltip] = useState(false);
+
   const handleGradeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (data.onGradeChange) {
       data.onGradeChange(data.courseId, event.target.value);
@@ -54,10 +56,22 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
         <div className="text-xs !text-gray-700 dark:!text-gray-300">נק"ז: {data.credits}</div>
 
         {prerequisitesMet === false && (
-          <div className="absolute bottom-1 left-1 text-red-500 dark:text-red-400" title="אחד או יותר מהקריטריונים המקדימים אינם מתקיימים">
+          <div 
+            className="absolute bottom-1 left-1 text-red-500 dark:text-red-400"
+            onMouseEnter={() => setShowPrereqTooltip(true)}
+            onMouseLeave={() => setShowPrereqTooltip(false)}
+          >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
+            {showPrereqTooltip && (
+              <div 
+                className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 min-w-max px-2 py-1 bg-gray-700 text-white text-xs rounded shadow-lg dark:bg-gray-900 dark:text-gray-200 border border-red-500 dark:border-red-400"
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                אחד או יותר מהקריטריונים המקדימים אינם מתקיימים
+              </div>
+            )}
           </div>
         )}
       </div>
