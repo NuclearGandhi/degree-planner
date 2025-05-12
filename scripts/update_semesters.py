@@ -290,6 +290,47 @@ def main():
                 "isClassificationCourse": special_courses_data[course_id]["isClassificationCourse"]
             }
         print(f"Added/Updated {len(special_courses_ids)} special classification courses.")
+
+        # Custom: Add specific no_credit_courses exceptions
+        custom_no_credit_exceptions = {
+            "00340053": ["00340029"] # Course ID: list of no_credit_courses to add
+            # Add more exceptions here if needed in the future, e.g.:
+            # "COURSE_ID_A": ["NO_CREDIT_A1", "NO_CREDIT_A2"],
+        }
+
+        for course_id, no_credit_additions_list in custom_no_credit_exceptions.items():
+            if course_id in all_courses_merged_map:
+                course_data = all_courses_merged_map[course_id]
+                
+                current_ids_set = set()
+                existing_no_credit_value = course_data.get('no_credit_courses')
+
+                if isinstance(existing_no_credit_value, str):
+                    if existing_no_credit_value.strip(): # Check if string is not empty/whitespace
+                        current_ids_set.update(existing_no_credit_value.split())
+                elif isinstance(existing_no_credit_value, list):
+                    # Handle cases where it might have become a list (e.g., from previous script versions)
+                    for item in existing_no_credit_value:
+                        if isinstance(item, str) and item.strip():
+                            current_ids_set.update(item.split()) 
+                # If it's None or any other type, current_ids_set remains empty, which is fine.
+
+                # Add new IDs from the custom exceptions list
+                for new_id_to_add in no_credit_additions_list:
+                    if new_id_to_add.strip(): # Ensure we don't add empty strings
+                        current_ids_set.add(new_id_to_add.strip())
+                
+                # Update the course data with the new space-separated string
+                if current_ids_set: # If there are any IDs in the set
+                    course_data['no_credit_courses'] = " ".join(sorted(list(current_ids_set)))
+                else:
+                    # If set is empty, store an empty string or None, based on preference.
+                    # Storing empty string for consistency if the field is expected to be a string.
+                    course_data['no_credit_courses'] = ""
+                
+                print(f"Updated no_credit_courses for {course_id} to: \"{course_data['no_credit_courses']}\"")
+            else:
+                print(f"Warning: Course {course_id} for custom no_credit_courses exception not found in merged map.")
         
         merged_courses_filepath = public_data_dir / "merged_courses.json"
         with open(merged_courses_filepath, "w", encoding="utf-8") as f:
