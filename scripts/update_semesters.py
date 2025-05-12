@@ -161,22 +161,61 @@ def build_course_map(courses, semester_label):
         num = general.get('מספר מקצוע')
         name = general.get('שם מקצוע')
         prereq_str = general.get('מקצועות קדם')
+
+        # Get base no_credit_courses and the new contained_no_credit_courses
+        no_credit_courses_str = general.get('מקצועות ללא זיכוי נוסף')
+        contained_no_credit_courses_str = general.get('מקצועות ללא זיכוי נוסף (מוכלים)')
+        
+        combined_no_credit_ids = set()
+        if isinstance(no_credit_courses_str, str) and no_credit_courses_str.strip():
+            combined_no_credit_ids.update(no_credit_courses_str.split())
+        if isinstance(contained_no_credit_courses_str, str) and contained_no_credit_courses_str.strip():
+            combined_no_credit_ids.update(contained_no_credit_courses_str.split())
+
+        # Filter out any potential empty strings that might have resulted from split
+        combined_no_credit_ids = {id_ for id_ in combined_no_credit_ids if id_.strip()}
+        final_no_credit_courses_str = " ".join(sorted(list(combined_no_credit_ids))) if combined_no_credit_ids else "" # Store as empty string if no IDs
+
         if num and name:
             if num not in course_map:
                 prereq_tree = parse_prerequisite_tree(prereq_str)
-                # Map all relevant fields to English keys
                 english_data = {}
                 for heb_key, eng_key in hebrew_to_english.items():
                     if heb_key in general:
-                        english_data[eng_key] = general[heb_key]
+                        # Special handling for no_credit_courses which we've already processed
+                        if eng_key == 'no_credit_courses':
+                            english_data[eng_key] = final_no_credit_courses_str
+                        else:
+                            english_data[eng_key] = general[heb_key]
+                
+                # Ensure no_credit_courses is present even if it was empty initially
+                if 'no_credit_courses' not in english_data:
+                    english_data['no_credit_courses'] = final_no_credit_courses_str
+
                 course_map[num] = {
                     **english_data,
                     'prereqTree': prereq_tree,
                     'semesters': [semester_label],
                 }
             else:
+                # Course already exists, just add semester and merge no_credit_courses
                 if semester_label not in course_map[num]['semesters']:
                     course_map[num]['semesters'].append(semester_label)
+                
+                # Merge no_credit_courses if the course is re-encountered in a different semester's initial build
+                # This part of the logic might be redundant if merge_course_maps handles it robustly,
+                # but ensures data from the same initial build pass (if courses are listed multiple times) is consistent.
+                existing_ids_set = set()
+                if isinstance(course_map[num].get('no_credit_courses'), str):
+                    existing_ids_set.update(course_map[num]['no_credit_courses'].split())
+                
+                # Add IDs from the current processing pass (which already includes both fields for this course instance)
+                current_pass_ids_set = set()
+                if isinstance(final_no_credit_courses_str, str):
+                     current_pass_ids_set.update(final_no_credit_courses_str.split())
+                
+                combined_set_for_existing_entry = {id_ for id_ in existing_ids_set.union(current_pass_ids_set) if id_.strip()}
+                course_map[num]['no_credit_courses'] = " ".join(sorted(list(combined_set_for_existing_entry))) if combined_set_for_existing_entry else ""
     return course_map
 
 # Updated merge_course_maps to iteratively merge a new semester's map into a base map
@@ -203,6 +242,22 @@ def merge_course_maps(base_map, incoming_semester_map): # incoming_semester_map 
             # Preserve the existing (newer) course details in base_map[course_num].
             # Only add the semester from this incoming_course_data (older semester) to its list.
             
+            # ---> NEW: Merge no_credit_courses from both sources <--- 
+            base_ids_set = set()
+            incoming_ids_set = set()
+            
+            base_no_credit_str = base_map[course_num].get('no_credit_courses')
+            incoming_no_credit_str = incoming_course_data.get('no_credit_courses')
+
+            if isinstance(base_no_credit_str, str) and base_no_credit_str.strip():
+                base_ids_set.update(base_no_credit_str.split())
+            if isinstance(incoming_no_credit_str, str) and incoming_no_credit_str.strip():
+                incoming_ids_set.update(incoming_no_credit_str.split())
+
+            combined_set_for_merge = {id_ for id_ in base_ids_set.union(incoming_ids_set) if id_.strip()}
+            base_map[course_num]['no_credit_courses'] = " ".join(sorted(list(combined_set_for_merge))) if combined_set_for_merge else ""
+            # ---> End of NEW no_credit_courses merge logic <--- 
+
             # Ensure 'semesters' list exists and is a list in the base_map entry.
             if 'semesters' not in base_map[course_num] or not isinstance(base_map[course_num]['semesters'], list):
                 # This should ideally not happen if base_map entries are always well-formed.
