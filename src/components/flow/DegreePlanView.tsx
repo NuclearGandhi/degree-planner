@@ -208,9 +208,10 @@ const transformDataToNodes = (
     const ruleStatus = evaluateRule(
       rule, coursesInCurrentPlan, currentGrades, 
       currentBinaryStates,
-      allCourses, 
-      template.semesters, template["courses-lists"], initialMandatoryCourseIds,
-      classificationCheckedState, classificationCreditsState
+      template["courses-lists"], 
+      initialMandatoryCourseIds,
+      classificationCheckedState, 
+      classificationCreditsState
     );
     const nodeId = `rule-${rule.id}`;
     
@@ -263,9 +264,10 @@ const transformDataToNodes = (
         const ruleStatus = evaluateRule(
           rule, coursesInCurrentPlan, currentGrades, 
           currentBinaryStates,
-          allCourses, 
-          template.semesters, template["courses-lists"], initialMandatoryCourseIds,
-          classificationCheckedState, classificationCreditsState
+          template["courses-lists"], 
+          initialMandatoryCourseIds,
+          classificationCheckedState, 
+          classificationCreditsState
         );
         consolidatedRuleDetails.push({
           id: rule.id,
