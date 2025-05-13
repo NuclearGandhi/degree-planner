@@ -1,10 +1,11 @@
 import { DegreesFileStructure, RawCourseData, DegreeTemplate } from '../types/data';
 
-const DATA_BASE_PATH = '/data'; // Assuming files are in public/data
+// const DATA_BASE_PATH = '/data'; // REMOVED
 
 export async function fetchAllCourses(): Promise<RawCourseData[]> {
   try {
-    const response = await fetch(`${DATA_BASE_PATH}/merged_courses.json`);
+    const mergedCoursesPath = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/data/merged_courses.json`.replace(/\/\//g, '/');
+    const response = await fetch(mergedCoursesPath);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -36,7 +37,8 @@ export async function fetchAllCourses(): Promise<RawCourseData[]> {
 
 export async function fetchDegreeTemplates(): Promise<DegreesFileStructure> {
   try {
-    const response = await fetch(`${DATA_BASE_PATH}/degrees.json`);
+    const degreesPath = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/data/degrees.json`.replace(/\/\//g, '/');
+    const response = await fetch(degreesPath);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }

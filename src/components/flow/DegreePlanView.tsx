@@ -35,7 +35,7 @@ import { checkPrerequisites, PrereqStatus } from '../../utils/prerequisiteChecke
 import { CourseDetailModal } from '../../components/ui/CourseDetailModal';
 import RuleEditorModal from '../../components/ui/RuleEditorModal';
 import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
-import { Logo } from '../../components/ui/Logo';
+import Logo from '../../components/ui/Logo';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
 import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
 import { useAuth } from '../../contexts/AuthContext';

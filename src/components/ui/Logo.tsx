@@ -1,11 +1,13 @@
 import React from 'react';
+import appIcon from '../../assets/icon.png'; // Import the icon
 
-export const Logo: React.FC = () => {
+const Logo = () => {
   return (
-    <div className="p-3 bg-slate-200 bg-opacity-60 dark:bg-slate-800 dark:bg-opacity-70 rounded-lg flex items-center space-x-3">
-      <span className="text-xl font-semibold text-slate-700 dark:text-slate-200">DegreePlanner</span>
-      <img src="/assets/icon.png" alt="DegreePlanner Logo" className="h-10 w-10 object-contain" />
-      {/* The path /assets/icon.png assumes icon.png is in public/assets */}
-    </div>
+    <a href="/" className="flex items-center space-x-2">
+      <span className="text-xl font-semibold text-gray-700 dark:text-gray-200">DegreePlanner</span>
+      <img src={appIcon} alt="DegreePlanner Logo" className="h-12 w-12 object-contain" />
+    </a>
   );
-}; 
+};
+
+export default Logo; 
