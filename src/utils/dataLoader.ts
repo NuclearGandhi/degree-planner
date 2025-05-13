@@ -51,7 +51,16 @@ export async function fetchDegreeTemplates(): Promise<DegreesFileStructure> {
 // Example utility: Get a specific degree template by ID
 export async function getDegreeTemplateById(degreeId: string): Promise<DegreeTemplate | undefined> {
   const templates = await fetchDegreeTemplates();
-  return templates[degreeId];
+  // Ensure we don't accidentally try to return globalRules as a DegreeTemplate
+  if (degreeId === 'globalRules') {
+    return undefined;
+  }
+  const potentialTemplate = templates[degreeId];
+  // Basic check to see if it looks like a DegreeTemplate
+  if (potentialTemplate && typeof potentialTemplate === 'object' && 'semesters' in potentialTemplate && !Array.isArray(potentialTemplate)) {
+    return potentialTemplate as DegreeTemplate;
+  }
+  return undefined;
 }
 
 // Example utility: Get a specific course by ID

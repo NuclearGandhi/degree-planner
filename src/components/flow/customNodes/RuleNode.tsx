@@ -9,7 +9,7 @@ interface ClassificationItemRowProps {
   item: NonNullable<RuleNodeData['classificationCourseDetails']>[number];
   isExemptionNode: boolean; // To pass down for styling or specific logic if needed
   textColor: string; // For label styling
-  onClassificationToggle?: (courseId: string) => void;
+  onClassificationToggle?: (courseId: string, isSelected: boolean) => void;
   onClassificationCreditsChange?: (courseId: string, credits: number) => void;
 }
 
@@ -64,7 +64,7 @@ const ClassificationItemRow: React.FC<ClassificationItemRowProps> = ({
           id={`classification-${item.id}`}
           type="checkbox"
           checked={item.checked}
-          onChange={() => onClassificationToggle?.(item.id)}
+          onChange={(e) => onClassificationToggle?.(item.id, e.target.checked)}
           className="ml-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-indigo-600"
         />
         <label

@@ -27,8 +27,8 @@ export function evaluateRule(
   coursesInPlan: RawCourseData[], // List of RawCourseData objects currently in the student's plan
   grades: Record<string, string>, // courseId: grade string
   binaryStates: Record<string, boolean>, // ADDED: courseId: isBinary status
-  allCoursesData: RawCourseData[], // All available course data (for looking up details of courses in lists)
-  templateSemesters: Record<string, string[]>, // Mandatory courses from template (CURRENTLY LIVE SEMESTERS, used by other rules perhaps)
+  // allCoursesData: RawCourseData[], // REMOVED - Was unused
+  // templateSemesters: Record<string, string[]>, // REMOVED - Was unused
   degreeCourseLists?: Record<string, string[] | number[]>, // Adjusted type
   initialTemplateMandatoryCourseIds?: string[], // NEW: IDs from the original template's semester definition
   // New optional parameters for classification/exemption credits
@@ -90,10 +90,17 @@ export function evaluateRule(
         const listIds = degreeCourseLists[rule.course_list_name] as string[];
         coursesToConsider = coursesInPlan.filter(cp => listIds.includes(cp._id));
         descriptionSuffix = ` מ${rule.course_list_name}`;
-      } else if (rule.type === 'minCreditsFromMandatory' && initialTemplateMandatoryCourseIds) {
-        const mandatoryIds = new Set(initialTemplateMandatoryCourseIds);
-        coursesToConsider = coursesInPlan.filter(cp => mandatoryIds.has(cp._id));
-        descriptionSuffix = ` (חובה)`;
+      } else if (rule.type === 'minCreditsFromMandatory') {
+        if (initialTemplateMandatoryCourseIds && Array.isArray(initialTemplateMandatoryCourseIds)) {
+          const mandatoryIds = new Set(initialTemplateMandatoryCourseIds);
+          coursesToConsider = coursesInPlan.filter(cp => mandatoryIds.has(cp._id));
+          descriptionSuffix = ` (חובה)`;
+        } else {
+          // If no mandatory courses are defined, this rule can't be satisfied by taking mandatory courses.
+          // Or, it could be considered trivially satisfied if 0 are required. For now, treat as 0 progress.
+          coursesToConsider = []; 
+          descriptionSuffix = ` (חובה - רשימה לא מוגדרת)`;
+        }
       } else if (rule.type === 'minCreditsFromAnySelectiveList' && degreeCourseLists) {
         const selectiveIds = new Set<string>();
         Object.entries(degreeCourseLists).forEach(([, list]) => {

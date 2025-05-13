@@ -54,19 +54,17 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
                   flex flex-col justify-between`}
     >
       <div> 
-        {data.onRemoveCourse && (
-          <button 
-            onClick={handleRemoveClick} 
-            onMouseDown={onInputMouseDown} 
-            className="absolute top-1 left-1 p-0.5 rounded-full !text-gray-400 hover:!bg-red-100 hover:!text-red-600 dark:hover:!bg-red-700 dark:hover:!text-red-200 transition-colors"
-            aria-label="הסר קורס"
-            title="הסר קורס"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+        <button 
+          onClick={handleRemoveClick} 
+          onMouseDown={onInputMouseDown} 
+          className="absolute top-1 left-1 p-0.5 rounded-full !text-gray-400 hover:!bg-red-100 hover:!text-red-600 dark:hover:!bg-red-700 dark:hover:!text-red-200 transition-colors"
+          aria-label="הסר קורס"
+          title="הסר קורס"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
         <div className="font-bold text-sm !text-gray-900 dark:!text-gray-100 mb-1 truncate" title={data.label}>{data.label}</div>
         <div className="text-xs !text-gray-700 dark:!text-gray-300">מספר קורס: {data.courseId}</div>
         <div className="text-xs !text-gray-700 dark:!text-gray-300">נק"ז: {data.credits}</div>

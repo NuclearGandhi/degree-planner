@@ -1,4 +1,3 @@
-import React from 'react';
 import { NodeProps } from '@xyflow/react';
 import { AddCourseDisplayNode } from '../../../types/flow'; // Adjusted import path
 
