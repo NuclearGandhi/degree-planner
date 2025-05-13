@@ -7,6 +7,8 @@ export interface StoredPlan {
   grades: Record<string, string>;
   classificationChecked: Record<string, boolean>;
   classificationCredits: Record<string, number>;
+  binaryStates?: Record<string, boolean>;
+  timestamp?: number;
   lastSaved?: string; 
 }
 
@@ -37,12 +39,14 @@ function setStorageData(data: StorageStructure): void {
   }
 }
 
-export function savePlan(template: DegreeTemplate, grades: Record<string, string>, classificationChecked: Record<string, boolean>, classificationCredits: Record<string, number>): void {
+export function savePlan(template: DegreeTemplate, grades: Record<string, string>, classificationChecked: Record<string, boolean>, classificationCredits: Record<string, number>, binaryStates: Record<string, boolean>): void {
   const planToSave: StoredPlan = {
     template: template,
     grades: grades,
     classificationChecked: classificationChecked,
     classificationCredits: classificationCredits,
+    binaryStates: binaryStates,
+    timestamp: Date.now(),
     lastSaved: new Date().toISOString(),
   };
   

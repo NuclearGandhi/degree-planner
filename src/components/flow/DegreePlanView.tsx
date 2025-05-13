@@ -18,11 +18,11 @@ import AddSemesterNode from './customNodes/AddSemesterNode';
 import SemesterTitleNode from './customNodes/SemesterTitleNode';
 import { CourseSelectionModal } from '../../components/ui/CourseSelectionModal';
 import { fetchAllCourses, fetchDegreeTemplates } from '../../utils/dataLoader';
-import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, PrerequisiteGroup, DegreesFileStructure } from '../../types/data';
+import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, PrerequisiteGroup } from '../../types/data';
 import { AppNode, AppEdge, RuleNodeData, CourseNodeData } from '../../types/flow';
 import { evaluateRule } from '../../utils/ruleEvaluator';
 import { AveragesDisplay } from '../../components/ui/AveragesDisplay';
-import { savePlan, loadPlan } from '../../utils/planStorage';
+import { savePlan, loadPlan, StoredPlan } from '../../utils/planStorage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { numberToHebrewLetter } from '../../utils/hebrewUtils';
 import { checkPrerequisites } from '../../utils/prerequisiteChecker';
@@ -32,6 +32,9 @@ import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
 import { Logo } from '../../components/ui/Logo';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
 import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { savePlanToFirestore, loadPlanFromFirestore } from '../../utils/firestoreUtils';
+import { AuthButtons } from '../ui/AuthButtons';
 
 const nodeTypes = {
   course: CourseNode,
@@ -450,8 +453,9 @@ const transformDataToEdges = (
 
 function DegreePlanView() {
   const { theme } = useTheme();
-  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode[]>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge[]>([]);
+  const { currentUser, loading: authLoading } = useAuth();
+  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge>([]);
   const [grades, setGrades] = useState<Record<string, string>>({});
   const [binaryStates, setBinaryStates] = useState<Record<string, boolean>>({});
   const [allCoursesData, setAllCoursesData] = useState<RawCourseData[]>([]);
@@ -580,7 +584,7 @@ function DegreePlanView() {
   const handleGradeChange = useCallback((courseId: string, grade: string) => {
     setGrades((prevGrades: Record<string, string>) => ({ ...prevGrades, [courseId]: grade }));
     if (grade !== '') {
-      setBinaryStates((prevStates: Record<string, boolean>) => {
+      setBinaryStates((prevStates: Record<string, boolean>) => { 
         if (prevStates[courseId]) { 
           const newStates = { ...prevStates };
           newStates[courseId] = false; 
@@ -761,9 +765,26 @@ function DegreePlanView() {
     setSaveStatus('saving');
 
     autosaveTimeoutRef.current = window.setTimeout(() => {
-      console.log("[DegreePlanView] Autosaving plan...");
-      savePlan(degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates);
-      setSaveStatus('saved');
+      if (currentUser && currentUser.uid) {
+        console.log("[DegreePlanView] Autosaving plan to Firestore for user:", currentUser.uid);
+        savePlanToFirestore(
+          currentUser.uid,
+          degreeTemplate,
+          grades,
+          classificationChecked,
+          classificationCredits,
+          binaryStates
+        ).then(() => {
+          setSaveStatus('saved');
+        }).catch(error => {
+          console.error("[DegreePlanView] Error autosaving to Firestore:", error);
+          setSaveStatus('idle');
+        });
+      } else {
+        console.log("[DegreePlanView] Autosaving plan to local storage (no user logged in)...");
+        savePlan(degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates);
+        setSaveStatus('saved');
+      }
     }, 1500);
 
     return () => {
@@ -771,73 +792,128 @@ function DegreePlanView() {
         clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, isLoading]);
+  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, currentUser, authLoading, setSaveStatus]);
 
   useEffect(() => {
     const loadInitialData = async () => {
-      console.log("[DegreePlanView] Initial Load: Starting data fetch and plan load.");
-      setIsLoading(true);
+      console.log("[DegreePlanView] Initial Load Effect Triggered. Auth Loading:", authLoading, "CurrentUser:", !!currentUser);
+  
+      // Don't proceed if auth state is still loading, wait for it to resolve
+      if (authLoading) {
+        console.log("[DegreePlanView] Initial Load: Waiting for auth state...");
+        setIsLoading(true); // Keep loading indicator active while waiting for auth
+        return;
+      }
+  
+      setIsLoading(true); // Start actual data loading process
+  
       try {
         const courses = await fetchAllCourses();
-        console.log("[DegreePlanView] Initial Load: Fetched allCourses:", courses);
+        console.log("[DegreePlanView] Initial Load: Fetched allCourses:", courses.length);
         setAllCoursesData(courses);
-        
-        let fetchedDegreeFileData: DegreesFileStructure | undefined = undefined;
+  
+        const fetchedDegreeFileData = await fetchDegreeTemplates();
+        console.log("[DegreePlanView] Initial Load: Fetched degree file data.");
+  
         let templateForProcessing: DegreeTemplate | undefined = undefined;
-        let globalRulesForProcessing: DegreeRule[] = [];
+        const globalRulesForProcessing: DegreeRule[] = fetchedDegreeFileData?.globalRules || [];
         let gradesForProcessing: Record<string, string> = {};
         let classificationCheckedForProcessing: Record<string, boolean> = {};
         let classificationCreditsForProcessing: Record<string, number> = {};
         let binaryStatesForProcessing: Record<string, boolean> = {};
-
-        const savedPlanData = loadPlan();
-        if (savedPlanData) {
-          console.log("[DegreePlanView] Initial Load: Found saved plan.", savedPlanData);
-          templateForProcessing = savedPlanData.template;
-          gradesForProcessing = savedPlanData.grades || {};
-          classificationCheckedForProcessing = savedPlanData.classificationChecked || {};
-          classificationCreditsForProcessing = savedPlanData.classificationCredits || {};
-          binaryStatesForProcessing = savedPlanData.binaryStates || {};
-
-          fetchedDegreeFileData = await fetchDegreeTemplates();
-          globalRulesForProcessing = fetchedDegreeFileData?.globalRules || [];
-
-          if (savedPlanData.template?.definedMandatoryCourseIds) {
+        let loadedFrom: 'firestore' | 'local' | 'default' = 'default';
+  
+        if (currentUser && currentUser.uid) {
+          // User is logged in, try Firestore first
+          console.log("[DegreePlanView] Initial Load: User logged in (" + currentUser.uid + "). Trying Firestore...");
+          const firestorePlan = await loadPlanFromFirestore(currentUser.uid);
+  
+          if (firestorePlan && firestorePlan.degreeTemplate) {
+            console.log("[DegreePlanView] Initial Load: Found plan in Firestore.");
+            loadedFrom = 'firestore';
+            templateForProcessing = firestorePlan.degreeTemplate;
+            gradesForProcessing = firestorePlan.grades || {};
+            classificationCheckedForProcessing = firestorePlan.classificationChecked || {};
+            classificationCreditsForProcessing = firestorePlan.classificationCredits || {};
+            binaryStatesForProcessing = firestorePlan.binaryStates || {};
+          } else {
+            // No Firestore plan found for this user, load default and trigger initial save
+            console.log("[DegreePlanView] Initial Load: No plan found in Firestore for user. Loading default template.");
+            loadedFrom = 'default';
+            const defaultTemplateId = 'mechanical-engineering-general';
+            templateForProcessing = fetchedDegreeFileData?.[defaultTemplateId] as DegreeTemplate | undefined;
+            // Reset states for default load
+            gradesForProcessing = {};
+            classificationCheckedForProcessing = {};
+            classificationCreditsForProcessing = {};
+            binaryStatesForProcessing = {};
+  
+            // Trigger initial save of default template to Firestore for this user
+            if (templateForProcessing) {
+              console.log("[DegreePlanView] Initial Load: Triggering initial save of default template to Firestore for user:", currentUser.uid);
+              await savePlanToFirestore(
+                currentUser.uid,
+                templateForProcessing,
+                gradesForProcessing,
+                classificationCheckedForProcessing,
+                classificationCreditsForProcessing,
+                binaryStatesForProcessing
+              );
+            }
           }
         } else {
-          console.log("[DegreePlanView] Initial Load: No saved plan found, fetching default template and global rules.");
-          fetchedDegreeFileData = await fetchDegreeTemplates();
-          const defaultTemplateId = 'mechanical-engineering-general'; 
-          templateForProcessing = fetchedDegreeFileData[defaultTemplateId] as DegreeTemplate | undefined;
-          globalRulesForProcessing = fetchedDegreeFileData?.globalRules || [];
-          binaryStatesForProcessing = {};
-          
-          if (templateForProcessing?.definedMandatoryCourseIds) {
-          } else if (templateForProcessing) {
+          // No user logged in, try local storage
+          console.log("[DegreePlanView] Initial Load: No user logged in. Trying local storage...");
+          const savedPlanData: StoredPlan | null = loadPlan(); // Use StoredPlan type
+          if (savedPlanData && savedPlanData.template) {
+            console.log("[DegreePlanView] Initial Load: Found plan in local storage.");
+            loadedFrom = 'local';
+            templateForProcessing = savedPlanData.template;
+            gradesForProcessing = savedPlanData.grades || {};
+            classificationCheckedForProcessing = savedPlanData.classificationChecked || {};
+            classificationCreditsForProcessing = savedPlanData.classificationCredits || {};
+            // Handle potentially missing binaryStates from older local saves
+            binaryStatesForProcessing = savedPlanData.binaryStates || {};
+          } else {
+            // No local storage plan, load default template
+            console.log("[DegreePlanView] Initial Load: No plan found in local storage. Loading default template.");
+            loadedFrom = 'default';
+            const defaultTemplateId = 'mechanical-engineering-general';
+            templateForProcessing = fetchedDegreeFileData?.[defaultTemplateId] as DegreeTemplate | undefined;
+            // Reset states for default load
+            gradesForProcessing = {};
+            classificationCheckedForProcessing = {};
+            classificationCreditsForProcessing = {};
+            binaryStatesForProcessing = {};
           }
         }
-
+  
+        // Set state based on loaded/default data
         if (templateForProcessing) {
-          console.log("[DegreePlanView] Initial Load: Setting degree template:", templateForProcessing);
+          console.log(`[DegreePlanView] Initial Load: Setting state. Loaded from: ${loadedFrom}`);
           setDegreeTemplate(templateForProcessing);
-          setCurrentGlobalRules(globalRulesForProcessing);
+          setCurrentGlobalRules(globalRulesForProcessing); // Global rules usually come from the file
           setGrades(gradesForProcessing);
           setClassificationChecked(classificationCheckedForProcessing);
           setClassificationCredits(classificationCreditsForProcessing);
           setBinaryStates(binaryStatesForProcessing);
         } else {
           console.error("[DegreePlanView] Initial Load: No template could be loaded (neither saved nor default).");
+          // Consider setting some default empty state or showing an error message
         }
+  
       } catch (error) {
         console.error("[DegreePlanView] Initial Load: Error loading initial data:", error);
+        // Handle error appropriately, maybe set an error state
       } finally {
-        console.log("[DegreePlanView] Initial Load: Finished. Setting isLoading to false.");
-        setIsLoading(false);
+        console.log("[DegreePlanView] Initial Load: Finished processing. Setting isLoading to false.");
+        setIsLoading(false); // Set loading false after processing is complete
       }
     };
-
+  
     loadInitialData();
-  }, []);
+  // Dependency array now includes auth state, so this runs when auth changes
+  }, [currentUser, authLoading]); // Removed empty array
 
   useEffect(() => {
     const actualSelectedCourseNode = selectedNodes.find(n => n.type === 'course');
@@ -916,8 +992,8 @@ function DegreePlanView() {
     const newEdges = transformDataToEdges(degreeTemplate, allCoursesData);
     console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
     
-    setNodes((_prevNodes: AppNode[]) => newNodes);
-    setEdges((_prevEdges: AppEdge[]) => newEdges);
+    setNodes(() => newNodes);
+    setEdges(() => newEdges);
   }, [
     degreeTemplate, allCoursesData, grades, binaryStates, classificationChecked, 
     classificationCredits, currentGlobalRules, initialMandatoryCourseIds,
@@ -950,6 +1026,8 @@ function DegreePlanView() {
       <div className="fixed top-4 left-4 z-50 flex flex-row-reverse items-center gap-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
         <Logo />
         <ThemeToggleButton />
+        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
+        <AuthButtons /> {/* Add AuthButtons here */}
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
         <div className="flex items-center justify-center min-w-[50px] text-center">
           {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}

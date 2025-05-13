@@ -9,4 +9,20 @@
   /* Add other global styles if needed */
 }
 
-/* Add any other specific styles for App.tsx components here */
+/* Ensure html, body, and root take full height for React Flow */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent body scrollbars if view takes full height */
+}
+
+.App {
+  height: 100%;
+  width: 100%;
+  /* Add other base styles for .App if needed */
+}
+
+/* Add any other existing styles below */
