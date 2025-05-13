@@ -10,9 +10,11 @@ interface CourseDetailModalProps {
   course: RawCourseData | null;
   allCourses: RawCourseData[];
   coursesInPlanIds?: Set<string>;
+  semesters?: Record<string, string[]>;
+  targetCourseSemesterKey?: string;
 }
 
-export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, onClose, course, allCourses, coursesInPlanIds }) => {
+export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, onClose, course, allCourses, coursesInPlanIds, semesters, targetCourseSemesterKey }) => {
   if (!isOpen || !course) {
     return null;
   }
@@ -23,7 +25,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
   const academicPoints = course.academic_points;
   const hours = course.hours;
   const faculty = course.faculty;
-  const semesters = Array.isArray(course.semester) ? course.semester.join(', ') : (course.semester || 'לא צוין');
+  const semestersFromInfo = course.semester;
   const descriptionFromInfo = course.info;
   const prerequisitesText = course.prerequisites as string | undefined;
   const courseUrl = course.url;
@@ -58,7 +60,13 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
     }
     return (
       <div className="mt-1 pl-2">
-        <PrereqTreeDisplay prereq={prereqTreeData} allCourses={allCourses} coursesInPlanIds={coursesInPlanIds} />
+        <PrereqTreeDisplay
+          prereq={prereqTreeData}
+          allCourses={allCourses}
+          coursesInPlanIds={coursesInPlanIds}
+          semesters={semesters}
+          targetCourseSemesterKey={targetCourseSemesterKey}
+        />
       </div>
     );
   };
@@ -83,7 +91,9 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ isOpen, on
         {academicPoints !== undefined && <p><strong className="font-medium text-gray-800 dark:text-gray-100">נקודות אקדמיות:</strong> {academicPoints}</p>}
         {hours && <p><strong className="font-medium text-gray-800 dark:text-gray-100">שעות:</strong> {hours}</p>}
         {faculty && <p><strong className="font-medium text-gray-800 dark:text-gray-100">פקולטה:</strong> {faculty}</p>}
-        {semesters && <p><strong className="font-medium text-gray-800 dark:text-gray-100">סמסטרים מוצעים:</strong> {semesters}</p>}
+        {semestersFromInfo && (
+          <p><strong className="font-medium text-gray-800 dark:text-gray-100">סמסטרים מוצעים:</strong> {semestersFromInfo.join(', ')}</p>
+        )}
         
         {descriptionFromInfo && (
           <div>

@@ -8,6 +8,12 @@ import {
   useEdgesState,
   BackgroundVariant,
   MarkerType,
+  Node,
+  Edge,
+  OnNodesChange,
+  OnEdgesChange,
+  OnSelectionChangeParams,
+  NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -19,13 +25,13 @@ import SemesterTitleNode from './customNodes/SemesterTitleNode';
 import { CourseSelectionModal } from '../../components/ui/CourseSelectionModal';
 import { fetchAllCourses, fetchDegreeTemplates } from '../../utils/dataLoader';
 import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, PrerequisiteGroup } from '../../types/data';
-import { AppNode, AppEdge, RuleNodeData, CourseNodeData } from '../../types/flow';
+import { CourseNodeData, RuleNodeData } from '../../types/flow';
 import { evaluateRule } from '../../utils/ruleEvaluator';
 import { AveragesDisplay } from '../../components/ui/AveragesDisplay';
 import { savePlan, loadPlan, StoredPlan } from '../../utils/planStorage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { numberToHebrewLetter } from '../../utils/hebrewUtils';
-import { checkPrerequisites } from '../../utils/prerequisiteChecker';
+import { checkPrerequisites, PrereqStatus } from '../../utils/prerequisiteChecker';
 import { CourseDetailModal } from '../../components/ui/CourseDetailModal';
 import RuleEditorModal from '../../components/ui/RuleEditorModal';
 import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
@@ -44,26 +50,30 @@ const nodeTypes = {
   semesterTitle: SemesterTitleNode,
 };
 
-const COLUMN_WIDTH = 340; // Increased from 300
-const NODE_HEIGHT_COURSE = 90; // Increased approximate height of a course node
-const VERTICAL_SPACING_RULE = 60; // Further increased vertical spacing, was 40
-const HORIZONTAL_SPACING_SEMESTER = 75; // New: Spacing between semester columns
-const SEMESTER_TOP_MARGIN = 120; // Increased from 100
+const COLUMN_WIDTH = 340;
+const NODE_HEIGHT_COURSE = 90;
+const VERTICAL_SPACING_RULE = 60;
+const HORIZONTAL_SPACING_SEMESTER = 75;
+const SEMESTER_TOP_MARGIN = 120;
 const ADD_SEMESTER_NODE_ID = 'add-new-semester-button';
 const MAX_SEMESTERS = 16;
-const SEMESTER_TITLE_HEIGHT = 40; // Approximate height for the title node + spacing
+const SEMESTER_TITLE_HEIGHT = 40;
 const MANDATORY_COURSES_LIST_KEY = "רשימת קורסי חובה";
 const CONSOLIDATED_RULES_NODE_ID = 'consolidated-rules-node';
-const GLOBAL_RULES_NODE_ID_PREFIX = 'global-rule-'; // Prefix for global rule node IDs
+const GLOBAL_RULES_NODE_ID_PREFIX = 'global-rule-';
 
-type SaveStatus = 'idle' | 'saving' | 'saved'; // New type for save status
+type SaveStatus = 'idle' | 'saving' | 'saved';
 
 interface CourseDetailModalData {
   course: RawCourseData;
   coursesInPlanIds: Set<string>;
 }
 
-// NEW STATE for classification course checkboxes
+interface CourseDetailModalDataWithSemesters extends CourseDetailModalData {
+  semesters?: Record<string, string[]>;
+  targetCourseSemesterKey?: string;
+}
+
 const initialClassificationCheckedState: Record<string, boolean> = {};
 
 const transformDataToNodes = (
@@ -84,7 +94,9 @@ const transformDataToNodes = (
   initialMandatoryCourseIds?: string[],
   onEditRuleCallback?: (ruleId: string) => void,
   onDeleteRuleCallback?: (ruleId: string) => void
-): AppNode[] => {
+): Node[] => {
+  console.log('[transformDataToNodes] Function called. import.meta.env.DEV:', import.meta.env.DEV);
+
   if (!template || typeof template.semesters !== 'object' || template.semesters === null) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
       console.warn('Data Structure Warning (transformDataToNodes): template.semesters is not an object!', template.semesters);
@@ -92,7 +104,7 @@ const transformDataToNodes = (
     return [];
   }
 
-  const flowNodes: AppNode[] = [];
+  const flowNodes: Node[] = [];
   let currentContentY = VERTICAL_SPACING_RULE;
   let maxEstimatedRuleHeight = 0;
   const ruleRowStartY = currentContentY;
@@ -120,7 +132,6 @@ const transformDataToNodes = (
       globalHasClassificationRule = true;
       totalRuleGroups++;
     }
-    // Add counts for other global rule types if they are to be displayed as separate nodes
   }
 
   if (template.rules && Array.isArray(template.rules)) {
@@ -131,7 +142,7 @@ const transformDataToNodes = (
     let tempConsolidatedExists = false;
     template.rules.forEach(rule => {
       if (!rule || typeof rule.id === 'undefined' || typeof rule.description === 'undefined') return;
-      if (rule.type === 'classification_courses') return; // Already counted if global
+      if (rule.type === 'classification_courses') return;
 
       if (consolidatedRuleTypes.has(rule.type)) {
         tempConsolidatedExists = true;
@@ -146,14 +157,13 @@ const transformDataToNodes = (
     totalRuleGroups += templateOtherRulesForCount.length;
   }
 
-  let currentRuleNodeDisplayIndex = 0; // Visual index from left (0) to right (totalRuleGroups - 1)
+  let currentRuleNodeDisplayIndex = 0;
 
-  // 1. Process Global "פטורים" Node (if it exists) - This should be leftmost
   if (globalHasClassificationRule) {
     const classificationRule = globalRules.find(rule => rule.type === 'classification_courses');
     if (classificationRule && classificationRule.courses) {
       const nodeId = `${GLOBAL_RULES_NODE_ID_PREFIX}${classificationRule.id}`;
-      const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex; // Leftmost gets highest factor
+      const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
       const nodePosition = { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY };
 
       const detailsForNode = classificationRule.courses.map(course => ({
@@ -167,26 +177,25 @@ const transformDataToNodes = (
       const estimatedHeightClassification = 70 + (detailsForNode.length * 35);
       maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeightClassification);
 
+      const classificationNodeData: RuleNodeData = {
+        id: classificationRule.id,
+        description: "פטורים",
+        currentProgress: "בחר פטורים שהושלמו",
+        isSatisfied: false,
+        classificationCourseDetails: detailsForNode,
+        onClassificationToggle: onClassificationToggleCallback,
+        onClassificationCreditsChange: onClassificationCreditsChangeCallback,
+      };
       flowNodes.push({
         id: nodeId,
         type: 'rule',
         position: nodePosition,
-        data: {
-          id: classificationRule.id, // Original rule ID for data consistency
-          description: "פטורים",
-          currentProgress: "בחר פטורים שהושלמו",
-          isSatisfied: false, // Neutral styling
-          classificationCourseDetails: detailsForNode,
-          onClassificationToggle: onClassificationToggleCallback,
-          onClassificationCreditsChange: onClassificationCreditsChangeCallback,
-          // Global rules are generally not editable/deletable in this context
-        },
+        data: classificationNodeData,
       });
-      currentRuleNodeDisplayIndex++; // Increment after placing the node
+      currentRuleNodeDisplayIndex++;
     }
   }
 
-  // 2. Process Other Template-Specific Rules (e.g., minCoursesFromMultipleLists)
   const otherRules = template.rules!.filter(rule => {
     const consolidatedRuleTypes = new Set([
       'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
@@ -212,27 +221,30 @@ const transformDataToNodes = (
     maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeight);
 
     const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
+    const ruleNodeData: RuleNodeData = {
+      id: rule.id,
+      description: rule.description || "כלל ללא תיאור",
+      currentProgress: ruleStatus.currentProgressString,
+      targetProgress: ruleStatus.requiredValue,
+      isSatisfied: ruleStatus.isSatisfied,
+      listName: rule.listName || rule.course_list_name,
+      minGrade: rule.min_grade_value,
+      minCourses: (rule.type === 'minCoursesFromList' || rule.type === 'minCoursesFromMultipleLists') ? rule.min : undefined,
+      minCredits: (rule.type === 'credits_from_list' || rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList' || rule.type === 'total_credits') ? (rule.min ?? rule.required_credits) : undefined,
+      listProgressDetails: ruleStatus.listProgressDetails ?? undefined,
+      onEditRule: () => onEditRuleCallback?.(rule.id),
+      onDeleteRule: () => onDeleteRuleCallback?.(rule.id),
+    };
+
     flowNodes.push({
       id: nodeId,
       type: 'rule',
       position: { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY },
-      data: {
-        id: rule.id,
-        description: rule.description,
-        currentProgress: ruleStatus.currentProgressString,
-        isSatisfied: ruleStatus.isSatisfied,
-        currentValuePlanned: ruleStatus.currentValuePlanned,
-        currentValueDone: ruleStatus.currentValueDone,
-        requiredValue: ruleStatus.requiredValue,
-        listProgressDetails: ruleStatus.listProgressDetails,
-        onEditRule: onEditRuleCallback,
-        onDeleteRule: onDeleteRuleCallback,
-      },
+      data: ruleNodeData,
     });
     currentRuleNodeDisplayIndex++;
   });
 
-  // 3. Process Template-Specific Consolidated Rule Node (if it exists) - Now processed last among rule groups
   if (templateHasConsolidatedGroup) {
     const rulesToConsolidate = template.rules!.filter(rule => {
       const consolidatedRuleTypes = new Set([
@@ -260,9 +272,9 @@ const transformDataToNodes = (
           description: rule.description || `חוק ${rule.type}`,
           currentProgress: ruleStatus.currentProgressString,
           isSatisfied: ruleStatus.isSatisfied,
-          currentValuePlanned: ruleStatus.currentValuePlanned,
-          currentValueDone: ruleStatus.currentValueDone,
-          requiredValue: ruleStatus.requiredValue,
+          currentValuePlanned: ruleStatus.currentValuePlanned ?? undefined,
+          currentValueDone: ruleStatus.currentValueDone ?? undefined,
+          requiredValue: ruleStatus.requiredValue ?? undefined,
         });
         if (!ruleStatus.isSatisfied) {
           allConsolidatedSatisfied = false;
@@ -273,19 +285,20 @@ const transformDataToNodes = (
       maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeightConsolidated);
 
       const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
+      const consolidatedNodeData: RuleNodeData = {
+        id: consolidatedNodeId,
+        description: "התקדמות אקדמית כללית",
+        isSatisfied: allConsolidatedSatisfied,
+        currentProgress: `${consolidatedRuleDetails.filter(r => r.isSatisfied).length} / ${consolidatedRuleDetails.length} תתי-כללים הושלמו`,
+        targetProgress: consolidatedRuleDetails.length,
+        isConsolidated: true,
+        consolidatedRules: consolidatedRuleDetails,
+      };
       flowNodes.push({
         id: consolidatedNodeId,
         type: 'rule',
         position: { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY },
-        data: {
-          id: consolidatedNodeId,
-          description: "התקדמות אקדמית כללית",
-          currentProgress: `${consolidatedRuleDetails.filter((r: NonNullable<RuleNodeData['consolidatedRules']>[number]) => r.isSatisfied).length} / ${consolidatedRuleDetails.length} תתי-כללים הושלמו`,
-          isSatisfied: allConsolidatedSatisfied,
-          consolidatedRules: consolidatedRuleDetails,
-          onEditRule: onEditRuleCallback,
-          onDeleteRule: onDeleteRuleCallback,
-        },
+        data: consolidatedNodeData,
       });
       currentRuleNodeDisplayIndex++;
     }
@@ -293,7 +306,6 @@ const transformDataToNodes = (
 
   currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
 
-  // Semester Title and Course Node Generation (uses the calculated currentContentY)
   semesterEntries.forEach(([semesterName, courseIds], semesterIndex) => {
     const semesterNumberForLayout = semesterIndex + 1;
     const semesterXPos = baseSemesterAreaStartX + (maxSemesterNum - semesterNumberForLayout) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
@@ -301,19 +313,18 @@ const transformDataToNodes = (
     flowNodes.push({
       id: `title-sem-${semesterNumberForLayout}`,
       type: 'semesterTitle',
-      position: { x: semesterXPos, y: currentContentY }, // Titles start at currentContentY
+      position: { x: semesterXPos, y: currentContentY },
       data: { title: semesterName },
       draggable: false,
       selectable: false,
     });
 
-    let currentYInSemester = currentContentY + SEMESTER_TITLE_HEIGHT; // Courses start below title
+    let currentYInSemester = currentContentY + SEMESTER_TITLE_HEIGHT;
 
     courseIds.forEach((courseId) => {
-      // Add guard for invalid courseId
       if (typeof courseId !== 'string' || !courseId) {
         console.warn(`[transformDataToNodes] Skipping invalid courseId: ${courseId} in semesterIndex ${semesterIndex}`);
-        return; // Skip this iteration
+        return;
       }
 
       const courseData = allCourses.find(c => c._id === courseId);
@@ -322,7 +333,17 @@ const transformDataToNodes = (
         return;
       }
 
-      const prereqsMet = checkPrerequisites(
+      if (import.meta.env.DEV) {
+        console.debug(`[transformDataToNodes] Checking prerequisites for course: ${courseData._id} (${courseData.name}) in semester ${semesterNumberForLayout}. Inputs:`, {
+          courseData,
+          semesterNumberForLayout,
+          semesters: template.semesters,
+          // allCourses, // Avoid logging allCourses repeatedly, it's large
+          classificationCheckedState
+        });
+      }
+
+      const prereqStatusResult: PrereqStatus = checkPrerequisites(
         courseData, 
         semesterNumberForLayout, 
         template.semesters, 
@@ -330,10 +351,13 @@ const transformDataToNodes = (
         classificationCheckedState
       );
 
+      if (import.meta.env.DEV) {
+        console.debug(`[transformDataToNodes] Prereq status for ${courseData._id}: ${prereqStatusResult}`);
+      }
+
       const nodeId = courseId;
       const nodePosition = { x: semesterXPos, y: currentYInSemester };
       
-      // Ensure the data matches CourseNodeData type structure
       const courseNodeData: CourseNodeData = {
         label: courseData.name || courseId,
         courseId: courseData._id,
@@ -341,7 +365,7 @@ const transformDataToNodes = (
         grade: currentGrades[courseId] || '',
         onGradeChange: onGradeChangeCallback,
         onRemoveCourse: onRemoveCourseCallback,
-        prerequisitesMet: prereqsMet,
+        prerequisitesMet: prereqStatusResult,
         isBinary: currentBinaryStates[courseId] || false,
         onBinaryChange: handleBinaryChange,
       };
@@ -377,9 +401,9 @@ const transformDataToNodes = (
     });
   }
 
-  if (currentRuleNodeDisplayIndex > 0) { // If any rule nodes were processed
+  if (currentRuleNodeDisplayIndex > 0) {
     currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
-  } else { // No rules at all
+  } else {
     currentContentY = Math.max(currentContentY, SEMESTER_TOP_MARGIN);
   }
 
@@ -389,7 +413,7 @@ const transformDataToNodes = (
 const transformDataToEdges = (
   template: DegreeTemplate | undefined,
   allCourses: RawCourseData[]
-): AppEdge[] => {
+): Edge[] => {
   console.log('[transformDataToEdges] Starting. Template defined:', !!template, 'AllCourses count:', Array.isArray(allCourses) ? allCourses.length : 'N/A');
   if (!template || typeof template.semesters !== 'object' || template.semesters === null || !Array.isArray(allCourses)) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
@@ -401,8 +425,8 @@ const transformDataToEdges = (
     return [];
   }
 
-  const edges: AppEdge[] = [];
-  const edgeIdSet = new Set<string>(); // Track unique edge IDs
+  const edges: Edge[] = [];
+  const edgeIdSet = new Set<string>();
   const allCourseIdsInPlan = Object.values(template.semesters).flat();
   console.log('[transformDataToEdges] All course IDs in current plan:', allCourseIdsInPlan);
 
@@ -426,7 +450,6 @@ const transformDataToEdges = (
               markerEnd: { type: MarkerType.ArrowClosed, color: '#cccccc' },
               animated: false,
               style: { stroke: '#cccccc', strokeWidth: 1.5, strokeOpacity: 0.2 },
-              pathOptions: { curvature: 0.25 }
             });
             edgeIdSet.add(edgeId);
           }
@@ -454,8 +477,8 @@ const transformDataToEdges = (
 function DegreePlanView() {
   const { theme } = useTheme();
   const { currentUser, loading: authLoading } = useAuth();
-  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [grades, setGrades] = useState<Record<string, string>>({});
   const [binaryStates, setBinaryStates] = useState<Record<string, boolean>>({});
   const [allCoursesData, setAllCoursesData] = useState<RawCourseData[]>([]);
@@ -463,12 +486,12 @@ function DegreePlanView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [semesterToAddCourseTo, setSemesterToAddCourseTo] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-  const [courseDetailModalData, setCourseDetailModalData] = useState<CourseDetailModalData | null>(null);
+  const [courseDetailModalData, setCourseDetailModalData] = useState<CourseDetailModalDataWithSemesters | null>(null);
   const [editingRule, setEditingRule] = useState<DegreeRule | null>(null);
   const [isRuleEditorOpen, setIsRuleEditorOpen] = useState(false);
   const [isCourseListEditorOpen, setIsCourseListEditorOpen] = useState(false);
   const [isConsolidatedRuleEditorOpen, setIsConsolidatedRuleEditorOpen] = useState(false);
-  const [selectedNodes, setSelectedNodes] = useState<AppNode[]>([]);
+  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [rulesForConsolidatedEditing, setRulesForConsolidatedEditing] = useState<DegreeRule[]>([]);
   const [currentGlobalRules, setCurrentGlobalRules] = useState<DegreeRule[]>([]);
 
@@ -624,17 +647,33 @@ function DegreePlanView() {
     setSelectedNodes(prevSelected => prevSelected.filter(node => node.id !== courseIdToRemove));
   }, [setDegreeTemplate, setGrades, setSelectedNodes]);
 
-  const handleNodeDoubleClick = useCallback((_event: React.MouseEvent, node: AppNode) => {
+  const handleNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
     console.log('[DegreePlanView] handleNodeDoubleClick called with node:', node);
     if (node.type === 'course' && node.data) {
-      const courseId = node.data.courseId as string;
+      const courseData = node.data as CourseNodeData;
+      const courseId = courseData.courseId;
       const foundCourse = allCoursesData.find(c => c._id === courseId);
       if (foundCourse) {
-        setCourseDetailModalData({ course: foundCourse, coursesInPlanIds: coursesInPlanFlatIds });
+        let targetSemesterKey: string | undefined = undefined;
+        if (degreeTemplate && degreeTemplate.semesters) {
+          for (const [key, courseIdsInSem] of Object.entries(degreeTemplate.semesters)) {
+            if (courseIdsInSem.includes(courseId)) {
+              targetSemesterKey = key;
+              break;
+            }
+          }
+        }
+        setCourseDetailModalData({
+          course: foundCourse,
+          coursesInPlanIds: coursesInPlanFlatIds,
+          semesters: degreeTemplate?.semesters,
+          targetCourseSemesterKey: targetSemesterKey,
+        });
       }
     }
-    if (node.type === 'rule' && node.data && node.data.id) {
-      const ruleId = node.data.id as string;
+    if (node.type === 'rule' && node.data) {
+      const ruleData = node.data as RuleNodeData;
+      const ruleId = ruleData.id;
       if (ruleId === CONSOLIDATED_RULES_NODE_ID) {
         const rulesToEdit = degreeTemplate?.rules?.filter(rule =>
           new Set([
@@ -656,7 +695,7 @@ function DegreePlanView() {
     }
   }, [allCoursesData, coursesInPlanFlatIds, degreeTemplate, setCourseDetailModalData, setEditingRule, setIsRuleEditorOpen, setRulesForConsolidatedEditing, setIsConsolidatedRuleEditorOpen]);
 
-  const handleNodeClick = useCallback((_event: React.MouseEvent, node: AppNode) => {
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     console.log('[DegreePlanView] handleNodeClick called with node:', node);
   }, []);
 
@@ -798,14 +837,13 @@ function DegreePlanView() {
     const loadInitialData = async () => {
       console.log("[DegreePlanView] Initial Load Effect Triggered. Auth Loading:", authLoading, "CurrentUser:", !!currentUser);
   
-      // Don't proceed if auth state is still loading, wait for it to resolve
       if (authLoading) {
         console.log("[DegreePlanView] Initial Load: Waiting for auth state...");
-        setIsLoading(true); // Keep loading indicator active while waiting for auth
+        setIsLoading(true);
         return;
       }
   
-      setIsLoading(true); // Start actual data loading process
+      setIsLoading(true);
   
       try {
         const courses = await fetchAllCourses();
@@ -824,7 +862,6 @@ function DegreePlanView() {
         let loadedFrom: 'firestore' | 'local' | 'default' = 'default';
   
         if (currentUser && currentUser.uid) {
-          // User is logged in, try Firestore first
           console.log("[DegreePlanView] Initial Load: User logged in (" + currentUser.uid + "). Trying Firestore...");
           const firestorePlan = await loadPlanFromFirestore(currentUser.uid);
   
@@ -837,18 +874,15 @@ function DegreePlanView() {
             classificationCreditsForProcessing = firestorePlan.classificationCredits || {};
             binaryStatesForProcessing = firestorePlan.binaryStates || {};
           } else {
-            // No Firestore plan found for this user, load default and trigger initial save
             console.log("[DegreePlanView] Initial Load: No plan found in Firestore for user. Loading default template.");
             loadedFrom = 'default';
             const defaultTemplateId = 'mechanical-engineering-general';
             templateForProcessing = fetchedDegreeFileData?.[defaultTemplateId] as DegreeTemplate | undefined;
-            // Reset states for default load
             gradesForProcessing = {};
             classificationCheckedForProcessing = {};
             classificationCreditsForProcessing = {};
             binaryStatesForProcessing = {};
   
-            // Trigger initial save of default template to Firestore for this user
             if (templateForProcessing) {
               console.log("[DegreePlanView] Initial Load: Triggering initial save of default template to Firestore for user:", currentUser.uid);
               await savePlanToFirestore(
@@ -862,9 +896,8 @@ function DegreePlanView() {
             }
           }
         } else {
-          // No user logged in, try local storage
           console.log("[DegreePlanView] Initial Load: No user logged in. Trying local storage...");
-          const savedPlanData: StoredPlan | null = loadPlan(); // Use StoredPlan type
+          const savedPlanData: StoredPlan | null = loadPlan();
           if (savedPlanData && savedPlanData.template) {
             console.log("[DegreePlanView] Initial Load: Found plan in local storage.");
             loadedFrom = 'local';
@@ -872,15 +905,12 @@ function DegreePlanView() {
             gradesForProcessing = savedPlanData.grades || {};
             classificationCheckedForProcessing = savedPlanData.classificationChecked || {};
             classificationCreditsForProcessing = savedPlanData.classificationCredits || {};
-            // Handle potentially missing binaryStates from older local saves
             binaryStatesForProcessing = savedPlanData.binaryStates || {};
           } else {
-            // No local storage plan, load default template
             console.log("[DegreePlanView] Initial Load: No plan found in local storage. Loading default template.");
             loadedFrom = 'default';
             const defaultTemplateId = 'mechanical-engineering-general';
             templateForProcessing = fetchedDegreeFileData?.[defaultTemplateId] as DegreeTemplate | undefined;
-            // Reset states for default load
             gradesForProcessing = {};
             classificationCheckedForProcessing = {};
             classificationCreditsForProcessing = {};
@@ -888,32 +918,28 @@ function DegreePlanView() {
           }
         }
   
-        // Set state based on loaded/default data
         if (templateForProcessing) {
           console.log(`[DegreePlanView] Initial Load: Setting state. Loaded from: ${loadedFrom}`);
           setDegreeTemplate(templateForProcessing);
-          setCurrentGlobalRules(globalRulesForProcessing); // Global rules usually come from the file
+          setCurrentGlobalRules(globalRulesForProcessing);
           setGrades(gradesForProcessing);
           setClassificationChecked(classificationCheckedForProcessing);
           setClassificationCredits(classificationCreditsForProcessing);
           setBinaryStates(binaryStatesForProcessing);
         } else {
           console.error("[DegreePlanView] Initial Load: No template could be loaded (neither saved nor default).");
-          // Consider setting some default empty state or showing an error message
         }
   
       } catch (error) {
         console.error("[DegreePlanView] Initial Load: Error loading initial data:", error);
-        // Handle error appropriately, maybe set an error state
       } finally {
         console.log("[DegreePlanView] Initial Load: Finished processing. Setting isLoading to false.");
-        setIsLoading(false); // Set loading false after processing is complete
+        setIsLoading(false);
       }
     };
   
     loadInitialData();
-  // Dependency array now includes auth state, so this runs when auth changes
-  }, [currentUser, authLoading]); // Removed empty array
+  }, [currentUser, authLoading]);
 
   useEffect(() => {
     const actualSelectedCourseNode = selectedNodes.find(n => n.type === 'course');
@@ -952,8 +978,8 @@ function DegreePlanView() {
   }, [selectedNodes, setEdges]);
 
   useEffect(() => {
-    console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. Dependencies changed.");
-    console.log("[DegreePlanView] Node/Edge Update Effect: State before guard - isLoading:", isLoading, "currentTemplate:", degreeTemplate, "allCourses count:", Array.isArray(allCoursesData) ? allCoursesData.length : 'not an array');
+    console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. import.meta.env.DEV:", import.meta.env.DEV);
+    console.log("[DegreePlanView] Node/Edge Update Effect: Guard conditions - isLoading:", isLoading, "!degreeTemplate:", !degreeTemplate, "!Array.isArray(allCoursesData):", !Array.isArray(allCoursesData), "allCoursesData.length === 0:", Array.isArray(allCoursesData) && allCoursesData.length === 0);
     
     if (isLoading || !degreeTemplate || !Array.isArray(allCoursesData) || allCoursesData.length === 0) {
       console.log("[DegreePlanView] Node/Edge Update Effect: Guarded. Not generating nodes/edges yet.");
@@ -1003,9 +1029,9 @@ function DegreePlanView() {
     setNodes, setEdges, isLoading 
   ]);
 
-  const handleSelectionChange = useCallback(({ nodes: selNodes }: { nodes: AppNode[], edges: AppEdge[] }) => {
+  const handleSelectionChange = useCallback(({ nodes: selNodes }: OnSelectionChangeParams) => {
     setSelectedNodes(selNodes);
-  }, []);
+  }, [setSelectedNodes]);
 
   const availableCoursesForModal = useMemo(() => {
     if (!degreeTemplate || typeof degreeTemplate.semesters !== 'object' || degreeTemplate.semesters === null || !Array.isArray(allCoursesData)) {
@@ -1027,7 +1053,7 @@ function DegreePlanView() {
         <Logo />
         <ThemeToggleButton />
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
-        <AuthButtons /> {/* Add AuthButtons here */}
+        <AuthButtons />
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
         <div className="flex items-center justify-center min-w-[50px] text-center">
           {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}
@@ -1045,8 +1071,8 @@ function DegreePlanView() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onNodesChange={onNodesChange as OnNodesChange<Node>}
+          onEdgesChange={onEdgesChange as OnEdgesChange<Edge>}
           onSelectionChange={handleSelectionChange}
           nodeTypes={nodeTypes}
           fitView
@@ -1056,8 +1082,8 @@ function DegreePlanView() {
           nodesConnectable={false}
           selectNodesOnDrag={false}
           zoomOnDoubleClick={false}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          onNodeClick={handleNodeClick}
+          onNodeDoubleClick={handleNodeDoubleClick as NodeMouseHandler<Node>}
+          onNodeClick={handleNodeClick as NodeMouseHandler<Node>}
         >
           <Controls />
           <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
@@ -1079,6 +1105,8 @@ function DegreePlanView() {
           course={courseDetailModalData.course}
           allCourses={allCoursesData}
           coursesInPlanIds={courseDetailModalData.coursesInPlanIds}
+          semesters={courseDetailModalData.semesters}
+          targetCourseSemesterKey={courseDetailModalData.targetCourseSemesterKey}
         />
       )}
       <RuleEditorModal
