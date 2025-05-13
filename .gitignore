@@ -114,8 +114,6 @@ dist
 # Vite build output
 dist
 
-# Firebase Configuration - DO NOT COMMIT
-src/firebaseConfig.ts
 
 node_modules
 dist
