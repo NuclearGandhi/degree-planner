@@ -1,4 +1,3 @@
-import React from 'react';
 import appIcon from '../../assets/icon.png'; // Import the icon
 
 const Logo = () => {
