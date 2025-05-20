@@ -66,7 +66,6 @@ export function evaluateRule(
     case 'minCreditsFromMandatory':
     case 'minCreditsFromAnySelectiveList': {
       let reqValue: number | undefined = undefined;
-      const unit = 'נק"ז'; // Default unit is credits
       let coursesToConsider: RawCourseData[] = [];
       let descriptionSuffix = '';
       
@@ -133,7 +132,7 @@ export function evaluateRule(
       // Update satisfaction based on *done* credits (including exemptions for total_credits)
       isSatisfied = doneCreditsWithExemptions >= requiredValue;
       // Progress string shows DONE / REQUIRED (can be adapted later if needed)
-      currentProgressString = `${doneCreditsWithExemptions}/${requiredValue} ${unit}${descriptionSuffix}`;
+      currentProgressString = `${doneCreditsWithExemptions}/${requiredValue}${descriptionSuffix} נק"ז (מתוכנן: ${currentValuePlanned})`;
       // Ensure Planned is never less than Done, especially with exemptions
       currentValuePlanned = Math.max(currentValuePlanned, doneCreditsWithExemptions); 
       
@@ -144,7 +143,7 @@ export function evaluateRule(
             .filter(course => isCourseDone(course._id))
             .reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
            isSatisfied = currentValueDone >= requiredValue;
-           currentProgressString = `${currentValueDone}/${requiredValue} ${unit}${descriptionSuffix}`;
+           currentProgressString = `${currentValueDone}/${requiredValue}${descriptionSuffix} נק"ז (מתוכנן: ${currentValuePlanned})`;
       }
       
       break;
@@ -190,7 +189,7 @@ export function evaluateRule(
             listCurrentPlanned = coursesFromListInPlan.length;
             listCurrentDone = coursesFromListInPlan.filter(cp => isCourseDone(cp._id)).length;
             listSatisfied = listCurrentDone >= min;
-            listProgressText = `${listName}: ${listCurrentDone}/${min}`;
+            listProgressText = `${listName}: ${listCurrentDone}/${min} (מתוכנן: ${listCurrentPlanned})`;
             detailsArray.push({ listName, currentValuePlanned: listCurrentPlanned, currentValueDone: listCurrentDone, requiredValue: min, isSatisfied: listSatisfied });
           } else {
             detailsArray.push({ listName: listName || 'לא ידוע', currentValuePlanned: 0, currentValueDone: 0, requiredValue: min || 0, isSatisfied: false });
