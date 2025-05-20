@@ -59,8 +59,7 @@
           { "listName": "רשימה א'", "min": 1 },
           { "listName": "רשימה ב'", "min": 2 },
           { "listName": "רשימה ג'", "min": 2 },
-          { "listName": "רשימה ד'", "min": 2 },
-          { "listName": "רשימה ה'", "min": 2 }
+          { "listName": "רשימה ד'", "min": 1 }
         ]
       },
       {

@@ -40,10 +40,10 @@ export const AveragesDisplay: React.FC<AveragesDisplayProps> = ({
           {formatAverage(overallAverage)}
         </span>
       </div>
-      <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+      <div className="space-y-1 max-h-32 overflow-y-auto pl-1 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400 dark:hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
         {Object.entries(semesterCalculations).map(([semesterKey, calc]) => (
           <div key={semesterKey} className="flex justify-between items-center text-xs">
-            <span className="!text-gray-600 dark:!text-gray-400 truncate mr-2">{semesterKey}:</span>
+            <span className="!text-gray-600 dark:!text-gray-400 truncate ml-2">{semesterKey}:</span>
             <div className="flex items-center space-x-2 space-x-reverse">
               <span className="!text-gray-500 dark:!text-gray-500">
                 ({formatCredits(calc.totalCredits)} נק"ז)
