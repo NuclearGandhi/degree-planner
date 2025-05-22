@@ -234,21 +234,15 @@ const transformDataToNodes = (
 
   let effectiveMandatoryCourseIds: string[] | undefined = undefined;
   if (template) {
-    if (template.definedMandatoryCourseIds && template.definedMandatoryCourseIds.length > 0) {
-      effectiveMandatoryCourseIds = template.definedMandatoryCourseIds;
-      if (import.meta.env.DEV) {
-        console.debug('[transformDataToNodes] Using current template.definedMandatoryCourseIds for effectiveMandatoryCourseIds:', effectiveMandatoryCourseIds);
-      }
-    } else if (template.semesters && Object.keys(template.semesters).length > 0) {
-      effectiveMandatoryCourseIds = Object.values(template.semesters).flat().filter(id => typeof id === 'string');
-      if (import.meta.env.DEV) {
-        console.debug('[transformDataToNodes] Using current template.semesters for effectiveMandatoryCourseIds (definedMandatoryCourseIds was empty/missing):', effectiveMandatoryCourseIds);
-      }
-    } else {
-      if (import.meta.env.DEV) {
-        console.warn('[transformDataToNodes] Current template has no definedMandatoryCourseIds or populated semesters. effectiveMandatoryCourseIds will be empty array.');
-      }
-      effectiveMandatoryCourseIds = [];
+    effectiveMandatoryCourseIds = template.definedMandatoryCourseIds;
+    if (import.meta.env.DEV) {
+      console.debug('[transformDataToNodes] Using template.definedMandatoryCourseIds for effectiveMandatoryCourseIds:', effectiveMandatoryCourseIds);
+    }
+    if (effectiveMandatoryCourseIds === undefined) {
+        effectiveMandatoryCourseIds = [];
+        if (import.meta.env.DEV) {
+            console.warn('[transformDataToNodes] effectiveMandatoryCourseIds was undefined, defaulting to empty array.');
+        }
     }
   } else {
     if (import.meta.env.DEV) {
@@ -1007,12 +1001,30 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   
         if (templateForProcessing) {
           console.log(`[DegreePlanView] Initial Load: Setting state. Loaded from: ${loadedFrom}`);
-          // --- BEGIN DEBUG LOG for template.id ---
           if (import.meta.env.DEV) {
-            console.debug('[DegreePlanView Initial Load] templateForProcessing right before setDegreeTemplate:', templateForProcessing);
-            console.debug('[DegreePlanView Initial Load] templateForProcessing.id:', templateForProcessing.id);
+            console.debug('[DegreePlanView Initial Load] templateForProcessing right before processing definedMandatoryCourseIds:', JSON.parse(JSON.stringify(templateForProcessing)));
           }
-          // --- END DEBUG LOG for template.id ---
+
+          // Ensure definedMandatoryCourseIds is populated if missing
+          if (!templateForProcessing.definedMandatoryCourseIds || templateForProcessing.definedMandatoryCourseIds.length === 0) {
+            if (templateForProcessing.semesters && Object.keys(templateForProcessing.semesters).length > 0) {
+              const semesterBasedMandatoryIds = Object.values(templateForProcessing.semesters).flat().filter(id => typeof id === 'string');
+              templateForProcessing.definedMandatoryCourseIds = semesterBasedMandatoryIds;
+              if (import.meta.env.DEV) {
+                console.debug('[DegreePlanView Initial Load] Populated templateForProcessing.definedMandatoryCourseIds from semesters:', semesterBasedMandatoryIds);
+              }
+            } else {
+              templateForProcessing.definedMandatoryCourseIds = []; // Default to empty if no semesters either
+              if (import.meta.env.DEV) {
+                console.debug('[DegreePlanView Initial Load] Initialized templateForProcessing.definedMandatoryCourseIds as empty (no pre-existing and no semesters).');
+              }
+            }
+          } else {
+            if (import.meta.env.DEV) {
+              console.debug('[DegreePlanView Initial Load] templateForProcessing already had definedMandatoryCourseIds:', templateForProcessing.definedMandatoryCourseIds);
+            }
+          }
+
           setDegreeTemplate(templateForProcessing);
           setCurrentGlobalRules(globalRulesForProcessing);
           setGrades(gradesForProcessing);
