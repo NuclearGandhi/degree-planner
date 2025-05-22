@@ -90,15 +90,23 @@ export function evaluateRule(
         coursesToConsider = coursesInPlan.filter(cp => listIds.includes(cp._id));
         descriptionSuffix = ` מ${rule.course_list_name}`;
       } else if (rule.type === 'minCreditsFromMandatory') {
+        if (import.meta.env.DEV) {
+          console.debug(`[evaluateRule DEBUG] Evaluating 'minCreditsFromMandatory' for rule: "${rule.description || rule.id}"`);
+          console.debug(`[evaluateRule DEBUG]   Received initialTemplateMandatoryCourseIds (effectiveMandatoryCourseIds):`, initialTemplateMandatoryCourseIds ? [...initialTemplateMandatoryCourseIds] : 'undefined/empty');
+          console.debug(`[evaluateRule DEBUG]   Received coursesInPlan (IDs from current semesters):`, coursesInPlan.map(c => c._id));
+        }
         if (initialTemplateMandatoryCourseIds && Array.isArray(initialTemplateMandatoryCourseIds)) {
           const mandatoryIds = new Set(initialTemplateMandatoryCourseIds);
           coursesToConsider = coursesInPlan.filter(cp => mandatoryIds.has(cp._id));
-          descriptionSuffix = ` (חובה)`;
+          if (import.meta.env.DEV) {
+            console.debug('[evaluateRule DEBUG]   Filtered coursesToConsider (in plan AND in mandatory list):', coursesToConsider.map(c => ({ id: c._id, name: c.name, credits: c.credits })));
+          }
+          descriptionSuffix = ''; // Removed " (חובה)"
         } else {
           // If no mandatory courses are defined, this rule can't be satisfied by taking mandatory courses.
           // Or, it could be considered trivially satisfied if 0 are required. For now, treat as 0 progress.
           coursesToConsider = []; 
-          descriptionSuffix = ` (חובה - רשימה לא מוגדרת)`;
+          descriptionSuffix = ' (רשימה לא מוגדרת)';
         }
       } else if (rule.type === 'minCreditsFromAnySelectiveList' && degreeCourseLists) {
         const selectiveIds = new Set<string>();
@@ -119,6 +127,14 @@ export function evaluateRule(
       currentValueDone = coursesToConsider
         .filter(course => isCourseDone(course._id))
         .reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+
+      if (import.meta.env.DEV && (rule.type === 'minCreditsFromMandatory' || rule.type === 'total_credits')) { // Also log for total_credits for comparison
+        console.debug(`[evaluateRule DEBUG] For rule "${rule.description || rule.id}" (${rule.type}):`);
+        console.debug(`[evaluateRule DEBUG]   coursesToConsider for sum (IDs):`, coursesToConsider.map(c=>c._id));
+        console.debug(`[evaluateRule DEBUG]   Calculated currentValuePlanned: ${currentValuePlanned}`);
+        console.debug(`[evaluateRule DEBUG]   Calculated currentValueDone: ${currentValueDone}`);
+        console.debug(`[evaluateRule DEBUG]   RequiredValue: ${requiredValue}`);
+      }
 
       // Special handling for total_credits to include classification exemptions
       let doneCreditsWithExemptions = currentValueDone;
@@ -160,7 +176,7 @@ export function evaluateRule(
         currentValuePlanned = coursesFromListInPlan.length;
         currentValueDone = coursesFromListInPlan.filter(cp => isCourseDone(cp._id)).length;
         isSatisfied = currentValueDone >= requiredValue;
-        currentProgressString = `${currentValueDone}/${requiredValue} ${unit} מ${rule.listName}`;
+        currentProgressString = `${currentValueDone}/${requiredValue} ${unit} מ${rule.listName} (מתוכנן: ${currentValuePlanned})`;
       } else {
         currentProgressString = `כלל 'minCoursesFromList' לא הוגדר כראוי.`;
       }

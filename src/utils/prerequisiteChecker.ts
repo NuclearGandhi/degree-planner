@@ -90,46 +90,26 @@ export function checkPrerequisites(
   // Recursive helper function - now returns PrereqStatus
   const checkGroup = (prereq: PrerequisiteItem | PrerequisiteGroup | SAPPrerequisiteGroup): PrereqStatus => {
     if (typeof prereq === 'string') { // Base case: simple course ID
-      // Check classification courses (e.g., Miluim exemption)
-      // TODO: Make these classification IDs configurable or load from data
       const classificationIds = ["01130013", "01130014", "miluim_exemption"];
       if (classificationIds.includes(prereq)) {
         const isChecked = classificationChecked[prereq] || false;
-        if (import.meta.env.DEV) {
-            console.debug(`  [checkGroup] Classification Prereq ${prereq}: checked: ${isChecked}`);
-        }
         return isChecked ? 'MET' : 'ERROR_NOT_IN_PLAN';
       }
 
-      // Regular prerequisite course logic
-      let worstFoundStatus: PrereqStatus = 'ERROR_NOT_IN_PLAN'; // Assume not met initially
-      if (import.meta.env.DEV) {
-        console.debug(`    [checkGroup] Checking string prereq: '${prereq}' for target course in semester index ${targetSemesterIndexForComparison}`);
-        // JSON.stringify for templateSemesters can be very large if logged for every string prereq.
-        // Consider logging it once per checkPrerequisites call if needed, or only log relevant parts.
-        // For now, let's avoid logging the full templateSemesters here to reduce console noise.
-        // console.debug(`    [checkGroup] Plan semesters:`, JSON.parse(JSON.stringify(templateSemesters)));
-      }
+      let worstFoundStatus: PrereqStatus = 'ERROR_NOT_IN_PLAN'; 
 
       for (let i = 0; i < semesterKeys.length; i++) {
         const semesterKey = semesterKeys[i];
-        const currentSemesterPlanIndex = i; // This is the 0-indexed semester of the *potential* prerequisite
+        const currentSemesterPlanIndex = i; 
         const coursesInThisSemester = templateSemesters[semesterKey];
-        if (import.meta.env.DEV) {
-          console.debug(`      [checkGroup] Iterating plan semester index ${currentSemesterPlanIndex} ('${semesterKey}') for prereq '${prereq}'. Courses in this semester: [${coursesInThisSemester ? coursesInThisSemester.join(', ') : ''}]`);
-        }
 
-        if (!coursesInThisSemester) { // Guard against undefined semester course list
-          if (import.meta.env.DEV) console.debug(`        [checkGroup] Semester '${semesterKey}' has no courses. Skipping.`);
+        if (!coursesInThisSemester) { 
           continue;
         }
 
         for (const placedCourseId of coursesInThisSemester) {
           const equivalentsOfPlacedCourse = getEquivalentCourses(placedCourseId, allCoursesData);
           const isMatch = equivalentsOfPlacedCourse.has(prereq as string); 
-          if (import.meta.env.DEV) {
-            console.debug(`        [checkGroup] Checking placed course '${placedCourseId}' (equivalents: [${Array.from(equivalentsOfPlacedCourse).join(', ')}]) against prereq '${prereq}'. Match: ${isMatch}`);
-          }
 
           if (isMatch) {
             let currentMatchStatus: PrereqStatus;
@@ -137,27 +117,17 @@ export function checkPrerequisites(
               currentMatchStatus = 'MET';
             } else if (currentSemesterPlanIndex === targetSemesterIndexForComparison) {
               currentMatchStatus = 'WARN_SAME_SEMESTER';
-            } else { // currentSemesterPlanIndex > targetSemesterIndexForComparison
+            } else { 
               currentMatchStatus = 'ERROR_LATER_SEMESTER';
-            }
-            if (import.meta.env.DEV) {
-              console.debug(`          [checkGroup] Match found for prereq '${prereq}' with placed course '${placedCourseId}'. Prereq semester index: ${currentSemesterPlanIndex}, Target course semester index: ${targetSemesterIndexForComparison}. Status for this match: ${currentMatchStatus}`);
             }
 
             if (worstFoundStatus === 'ERROR_NOT_IN_PLAN' || getStatusPriority(currentMatchStatus) < getStatusPriority(worstFoundStatus)) {
               worstFoundStatus = currentMatchStatus;
-              if (import.meta.env.DEV) {
-                console.debug(`            [checkGroup] Prereq '${prereq}': worstFoundStatus updated to ${worstFoundStatus}`);
-              }
             }
           }
         }
       }
       
-      if (import.meta.env.DEV) {
-        // This log was already here, just ensuring it's clear
-        console.debug(`  [checkPrerequisites] Prereq ${prereq}: Final worst status for this single prereq: ${worstFoundStatus}`);
-      }
       return worstFoundStatus;
 
     } else if (prereq && typeof prereq === 'object') {
@@ -188,15 +158,9 @@ export function checkPrerequisites(
         const itemStatuses = items.map(item => checkGroup(item));
         if (logic === 'and') {
           const status = getWorstStatus(itemStatuses);
-          if (import.meta.env.DEV) {
-             console.debug(`  [checkPrerequisites] Group 'and': Result = ${status} (from ${itemStatuses.join(', ')})`);
-          }
           return status;
         } else { // logic === 'or'
           const status = getBestStatus(itemStatuses);
-           if (import.meta.env.DEV) {
-             console.debug(`  [checkPrerequisites] Group 'or': Result = ${status} (from ${itemStatuses.join(', ')})`);
-          }
           return status;
         }
       }

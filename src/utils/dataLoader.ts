@@ -42,8 +42,23 @@ export async function fetchDegreeTemplates(): Promise<DegreesFileStructure> {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    const data = await response.json();
-    return data as DegreesFileStructure;
+    const data = await response.json() as DegreesFileStructure;
+
+    // Inject ID into each template
+    const processedData: DegreesFileStructure = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        const item = data[key];
+        if (key !== 'globalRules' && typeof item === 'object' && item !== null && 'semesters' in item && !Array.isArray(item)) {
+          // It's a DegreeTemplate, add the id
+          processedData[key] = { ...(item as DegreeTemplate), id: key };
+        } else {
+          // It's globalRules or something else
+          processedData[key] = item;
+        }
+      }
+    }
+    return processedData;
   } catch (error) {
     console.error("Failed to fetch degree templates:", error);
     return {}; // Return empty object on error

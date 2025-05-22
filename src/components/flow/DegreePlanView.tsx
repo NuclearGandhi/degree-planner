@@ -64,6 +64,10 @@ const GLOBAL_RULES_NODE_ID_PREFIX = 'global-rule-';
 
 type SaveStatus = 'idle' | 'saving' | 'saved';
 
+interface DegreePlanViewProps {
+  allTemplatesData: Record<string, DegreeTemplate> | null;
+}
+
 interface CourseDetailModalData {
   course: RawCourseData;
   coursesInPlanIds: Set<string>;
@@ -91,10 +95,34 @@ const transformDataToNodes = (
   classificationCreditsState: Record<string, number>,
   onClassificationCreditsChangeCallback: (courseId: string, credits: number) => void,
   globalRules: DegreeRule[],
-  initialMandatoryCourseIds?: string[],
+  allTemplatesData: Record<string, DegreeTemplate> | null,
   onEditRuleCallback?: (ruleId: string) => void,
   onDeleteRuleCallback?: (ruleId: string) => void
 ): Node[] => {
+  // --- BEGIN MORE BASIC DEBUG LOG ---
+  if (import.meta.env.DEV) {
+    console.debug(
+      '[transformDataToNodes] Entry. template.id:',
+      template?.id,
+      'allTemplatesData is null?:',
+      allTemplatesData === null,
+      'allTemplatesData keys:',
+      allTemplatesData ? Object.keys(allTemplatesData) : 'N/A',
+      'template.id in allTemplatesData?:',
+      template && allTemplatesData ? !!allTemplatesData[template.id] : 'N/A'
+    );
+  }
+  // --- END MORE BASIC DEBUG LOG ---
+
+  // --- BEGIN DEBUG LOG ---
+  if (import.meta.env.DEV && template && allTemplatesData && allTemplatesData[template.id]) {
+    const pristineInTransform = allTemplatesData[template.id];
+    if (pristineInTransform && pristineInTransform.semesters) {
+        const mandatoryFromPristineInTransform = Object.values(pristineInTransform.semesters).flat();
+        console.debug(`[transformDataToNodes] Checking allTemplatesData[${template.id}].semesters directly. Count:`, mandatoryFromPristineInTransform.length, mandatoryFromPristineInTransform);
+    }
+  }
+  // --- END DEBUG LOG ---
   console.log('[transformDataToNodes] Function called. import.meta.env.DEV:', import.meta.env.DEV);
 
   if (!template || typeof template.semesters !== 'object' || template.semesters === null) {
@@ -204,12 +232,37 @@ const transformDataToNodes = (
     return rule.type !== 'classification_courses' && !consolidatedRuleTypes.has(rule.type) && rule.id && rule.description;
   });
 
+  let effectiveMandatoryCourseIds: string[] | undefined = undefined;
+  if (template) {
+    if (template.definedMandatoryCourseIds && template.definedMandatoryCourseIds.length > 0) {
+      effectiveMandatoryCourseIds = template.definedMandatoryCourseIds;
+      if (import.meta.env.DEV) {
+        console.debug('[transformDataToNodes] Using current template.definedMandatoryCourseIds for effectiveMandatoryCourseIds:', effectiveMandatoryCourseIds);
+      }
+    } else if (template.semesters && Object.keys(template.semesters).length > 0) {
+      effectiveMandatoryCourseIds = Object.values(template.semesters).flat().filter(id => typeof id === 'string');
+      if (import.meta.env.DEV) {
+        console.debug('[transformDataToNodes] Using current template.semesters for effectiveMandatoryCourseIds (definedMandatoryCourseIds was empty/missing):', effectiveMandatoryCourseIds);
+      }
+    } else {
+      if (import.meta.env.DEV) {
+        console.warn('[transformDataToNodes] Current template has no definedMandatoryCourseIds or populated semesters. effectiveMandatoryCourseIds will be empty array.');
+      }
+      effectiveMandatoryCourseIds = [];
+    }
+  } else {
+    if (import.meta.env.DEV) {
+      console.warn('[transformDataToNodes] Template is undefined. effectiveMandatoryCourseIds will be empty array.');
+    }
+    effectiveMandatoryCourseIds = [];
+  }
+
   otherRules.forEach((rule) => {
     const ruleStatus = evaluateRule(
       rule, coursesInCurrentPlan, currentGrades, 
       currentBinaryStates,
       template["courses-lists"], 
-      initialMandatoryCourseIds,
+      effectiveMandatoryCourseIds,
       classificationCheckedState, 
       classificationCreditsState
     );
@@ -265,7 +318,7 @@ const transformDataToNodes = (
           rule, coursesInCurrentPlan, currentGrades, 
           currentBinaryStates,
           template["courses-lists"], 
-          initialMandatoryCourseIds,
+          effectiveMandatoryCourseIds,
           classificationCheckedState, 
           classificationCreditsState
         );
@@ -476,7 +529,7 @@ const transformDataToEdges = (
   return edges;
 };
 
-function DegreePlanView() {
+function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   const { theme } = useTheme();
   const { currentUser, loading: authLoading } = useAuth();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -527,23 +580,6 @@ function DegreePlanView() {
   const coursesInPlanFlatIds = useMemo(() => {
     if (!degreeTemplate || !degreeTemplate.semesters) return new Set<string>();
     return new Set(Object.values(degreeTemplate.semesters).flat().filter(id => typeof id === 'string')) as Set<string>;
-  }, [degreeTemplate]);
-
-  const initialMandatoryCourseIds = useMemo(() => {
-    if (!degreeTemplate) return undefined;
-
-    if (Array.isArray(degreeTemplate.definedMandatoryCourseIds) && degreeTemplate.definedMandatoryCourseIds.length > 0) {
-      return degreeTemplate.definedMandatoryCourseIds;
-    }
-
-    if (typeof degreeTemplate.semesters === 'object' && degreeTemplate.semesters !== null) {
-      const allSemesterCourses = Object.values(degreeTemplate.semesters).flat().filter(id => typeof id === 'string');
-      if (allSemesterCourses.length > 0) {
-        return allSemesterCourses as string[];
-      }
-    }
-    
-    return undefined;
   }, [degreeTemplate]);
 
   const handleAddCourseToSemesterCallback = useCallback((semesterNumber: number) => {
@@ -729,12 +765,27 @@ function DegreePlanView() {
   }, []);
 
   const handleSaveCourseLists = useCallback((allListsFromModal: Record<string, string[]>) => {
+    if (import.meta.env.DEV) {
+      console.debug('[DegreePlanView handleSaveCourseLists] Received from modal:', JSON.parse(JSON.stringify(allListsFromModal)));
+      console.debug('[DegreePlanView handleSaveCourseLists] MANDATORY_COURSES_LIST_KEY is:', MANDATORY_COURSES_LIST_KEY);
+      console.debug('[DegreePlanView handleSaveCourseLists] Mandatory list from modal:', allListsFromModal[MANDATORY_COURSES_LIST_KEY]);
+    }
     setDegreeTemplate(prevTemplate => {
-      if (!prevTemplate) return undefined;
+      if (!prevTemplate) {
+        if (import.meta.env.DEV) console.warn('[DegreePlanView handleSaveCourseLists] prevTemplate is undefined');
+        return undefined;
+      }
+      if (import.meta.env.DEV) {
+        console.debug('[DegreePlanView handleSaveCourseLists] prevTemplate.definedMandatoryCourseIds before update:', prevTemplate.definedMandatoryCourseIds);
+      }
 
       const newDefinedMandatoryCourseIds = allListsFromModal[MANDATORY_COURSES_LIST_KEY] !== undefined
         ? allListsFromModal[MANDATORY_COURSES_LIST_KEY]
         : prevTemplate.definedMandatoryCourseIds;
+      
+      if (import.meta.env.DEV) {
+        console.debug('[DegreePlanView handleSaveCourseLists] newDefinedMandatoryCourseIds chosen:', newDefinedMandatoryCourseIds);
+      }
 
       const newCustomCoursesLists: Record<string, string[]> = {};
       for (const listName in allListsFromModal) {
@@ -871,6 +922,19 @@ function DegreePlanView() {
             console.log("[DegreePlanView] Initial Load: Found plan in Firestore.");
             loadedFrom = 'firestore';
             templateForProcessing = firestorePlan.degreeTemplate;
+            // Ensure ID exists, especially for older Firestore plans
+            if (!templateForProcessing.id && fetchedDegreeFileData) {
+              for (const key in fetchedDegreeFileData) {
+                if (key !== 'globalRules') {
+                  const pristineTemplate = fetchedDegreeFileData[key] as DegreeTemplate;
+                  if (pristineTemplate.name === templateForProcessing.name) {
+                    templateForProcessing.id = pristineTemplate.id; // Which is 'key'
+                    console.log(`[DegreePlanView] Initial Load: Assigned missing ID '${templateForProcessing.id}' to Firestore template based on name match.`);
+                    break;
+                  }
+                }
+              }
+            }
             gradesForProcessing = firestorePlan.grades || {};
             classificationCheckedForProcessing = firestorePlan.classificationChecked || {};
             classificationCreditsForProcessing = firestorePlan.classificationCredits || {};
@@ -904,6 +968,27 @@ function DegreePlanView() {
             console.log("[DegreePlanView] Initial Load: Found plan in local storage.");
             loadedFrom = 'local';
             templateForProcessing = savedPlanData.template;
+            // Ensure ID exists, especially for older local storage plans
+            if (import.meta.env.DEV) {
+                console.debug('[DegreePlanView Initial Load] Local plan loaded, template.id BEFORE potential fix:', templateForProcessing?.id);
+            }
+            if (!templateForProcessing.id && fetchedDegreeFileData) {
+              for (const key in fetchedDegreeFileData) {
+                if (key !== 'globalRules') {
+                  const pristineTemplate = fetchedDegreeFileData[key] as DegreeTemplate;
+                  // Ensure pristineTemplate and its name are defined
+                  if (pristineTemplate && pristineTemplate.name && pristineTemplate.id && templateForProcessing.name === pristineTemplate.name) {
+                    templateForProcessing.id = pristineTemplate.id; // pristineTemplate.id should be 'key' due to dataLoader changes
+                    console.log(`[DegreePlanView] Initial Load: Assigned missing ID '${templateForProcessing.id}' to local storage template '${templateForProcessing.name}' based on name match with pristine template '${key}'.`);
+                    break;
+                  }
+                }
+              }
+            }
+            if (import.meta.env.DEV) {
+                console.debug('[DegreePlanView Initial Load] Local plan loaded, template.id AFTER potential fix:', templateForProcessing?.id);
+            }
+
             gradesForProcessing = savedPlanData.grades || {};
             classificationCheckedForProcessing = savedPlanData.classificationChecked || {};
             classificationCreditsForProcessing = savedPlanData.classificationCredits || {};
@@ -922,6 +1007,12 @@ function DegreePlanView() {
   
         if (templateForProcessing) {
           console.log(`[DegreePlanView] Initial Load: Setting state. Loaded from: ${loadedFrom}`);
+          // --- BEGIN DEBUG LOG for template.id ---
+          if (import.meta.env.DEV) {
+            console.debug('[DegreePlanView Initial Load] templateForProcessing right before setDegreeTemplate:', templateForProcessing);
+            console.debug('[DegreePlanView Initial Load] templateForProcessing.id:', templateForProcessing.id);
+          }
+          // --- END DEBUG LOG for template.id ---
           setDegreeTemplate(templateForProcessing);
           setCurrentGlobalRules(globalRulesForProcessing);
           setGrades(gradesForProcessing);
@@ -1012,8 +1103,8 @@ function DegreePlanView() {
       handleClassificationToggle,
       classificationCredits,
       handleClassificationCreditsChange,
-      currentGlobalRules, 
-      initialMandatoryCourseIds,
+      currentGlobalRules,
+      allTemplatesData,
       handleEditRule,
       handleDeleteRule
     );
@@ -1024,11 +1115,11 @@ function DegreePlanView() {
     setEdges(() => newEdges);
   }, [
     degreeTemplate, allCoursesData, grades, binaryStates, classificationChecked, 
-    classificationCredits, currentGlobalRules, initialMandatoryCourseIds,
+    classificationCredits, currentGlobalRules,
     handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChange, 
     handleRemoveCourseCallback, handleBinaryChange, handleClassificationToggle, 
     handleClassificationCreditsChange, handleEditRule, handleDeleteRule,
-    setNodes, setEdges, isLoading 
+    setNodes, setEdges, isLoading, allTemplatesData 
   ]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: OnSelectionChangeParams) => {
