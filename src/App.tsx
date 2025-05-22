@@ -3,7 +3,7 @@ import DegreePlanView from './components/flow/DegreePlanView';
 import { AuthProvider } from './contexts/AuthContext';
 import './App.css';
 import { useEffect, useState } from 'react';
-import { DegreeTemplate, DegreesFileStructure } from './types/data';
+import { DegreeTemplate } from './types/data';
 import { fetchDegreeTemplates } from './utils/dataLoader';
 
 function App() {
