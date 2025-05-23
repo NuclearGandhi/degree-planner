@@ -136,33 +136,35 @@ export function evaluateRule(
         console.debug(`[evaluateRule DEBUG]   RequiredValue: ${requiredValue}`);
       }
 
-      // Special handling for total_credits to include classification exemptions
-      let doneCreditsWithExemptions = currentValueDone;
-      if (rule.type === 'total_credits' && classificationChecked && classificationCredits) {
-        if (classificationChecked['miluim_exemption'] && typeof classificationCredits['miluim_exemption'] === 'number') {
-          doneCreditsWithExemptions += classificationCredits['miluim_exemption'];
-          // Also add to planned credits if it's an exemption that counts towards the total
-          currentValuePlanned += classificationCredits['miluim_exemption'];
-        }
-        // Add other classification credits if needed
+      // Apply miluim exemptions if applicable for total_credits or minCreditsFromAnySelectiveList
+      if (
+        (rule.type === 'total_credits' || rule.type === 'minCreditsFromAnySelectiveList') &&
+        classificationChecked && classificationCredits &&
+        classificationChecked['miluim_exemption'] && 
+        typeof classificationCredits['miluim_exemption'] === 'number'
+      ) {
+        const miluimExemptionVal = classificationCredits['miluim_exemption'];
+        if (currentValueDone !== null) currentValueDone += miluimExemptionVal;
+        if (currentValuePlanned !== null) currentValuePlanned += miluimExemptionVal;
+      }
+      // TODO: Consider if other classificationChecked items should contribute to other rule types.
+      
+      // Finalize calculations for satisfaction and progress string
+      if (requiredValue !== null && currentValueDone !== null) {
+        isSatisfied = currentValueDone >= requiredValue;
+      } else {
+        isSatisfied = false; // Or some other default if values are null
       }
       
-      // Update satisfaction based on *done* credits (including exemptions for total_credits)
-      isSatisfied = doneCreditsWithExemptions >= requiredValue;
-      // Progress string shows DONE / REQUIRED (can be adapted later if needed)
-      currentProgressString = `${doneCreditsWithExemptions}/${requiredValue}${descriptionSuffix} נק"ז (מתוכנן: ${currentValuePlanned})`;
-      // Ensure Planned is never less than Done, especially with exemptions
-      currentValuePlanned = Math.max(currentValuePlanned, doneCreditsWithExemptions); 
-      
-      // Use doneCreditsWithExemptions for currentValueDone ONLY for total_credits rule
-      // For other credit rules, exemption credits shouldn't count towards list/mandatory/selective done totals.
-      if (rule.type !== 'total_credits') {
-           currentValueDone = coursesToConsider
-            .filter(course => isCourseDone(course._id))
-            .reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
-           isSatisfied = currentValueDone >= requiredValue;
-           currentProgressString = `${currentValueDone}/${requiredValue}${descriptionSuffix} נק"ז (מתוכנן: ${currentValuePlanned})`;
+      if (currentValuePlanned !== null && currentValueDone !== null) {
+        currentValuePlanned = Math.max(currentValuePlanned, currentValueDone); // Ensure planned is at least done
+      } else if (currentValueDone !== null) {
+        currentValuePlanned = currentValueDone; // If planned was null, set to done
       }
+      // Ensure currentValuePlanned is not null if currentValueDone is not, for string construction
+      const displayPlanned = currentValuePlanned ?? currentValueDone ?? 0;
+
+      currentProgressString = `${currentValueDone ?? 'N/A'}/${requiredValue ?? 'N/A'}${descriptionSuffix} נק"ז (מתוכנן: ${displayPlanned})`;
       
       break;
     }
