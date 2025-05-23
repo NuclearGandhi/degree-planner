@@ -17,7 +17,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
     const storedTheme = localStorage.getItem('theme') as Theme | null;
     // You could also check prefers-color-scheme here if no theme is stored
-    return storedTheme || 'light'; 
+    return storedTheme || 'dark'; 
   });
 
   useEffect(() => {

@@ -141,6 +141,8 @@ export function evaluateRule(
       if (rule.type === 'total_credits' && classificationChecked && classificationCredits) {
         if (classificationChecked['miluim_exemption'] && typeof classificationCredits['miluim_exemption'] === 'number') {
           doneCreditsWithExemptions += classificationCredits['miluim_exemption'];
+          // Also add to planned credits if it's an exemption that counts towards the total
+          currentValuePlanned += classificationCredits['miluim_exemption'];
         }
         // Add other classification credits if needed
       }
