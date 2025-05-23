@@ -140,24 +140,11 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
   // Percentage for the part that is planned but not yet done
   const percentPlannedNotDone = showProgressBar ? Math.min(100 - percentDone, Math.max(0, ((plannedValNum - doneValNum) / requiredValNum) * 100)) : 0;
 
-  const handleEdit = () => {
-    if (data.onEditRule) {
-      data.onEditRule(data.id);
-    }
-  };
-
-  const handleDelete = () => {
-    if (data.onDeleteRule) {
-      // Optional: Add a confirmation dialog here
-      data.onDeleteRule(data.id);
-    }
-  };
-
   return (
     <div dir="rtl" className={`rule-node p-3 border-r-4 rounded-md shadow-lg w-[340px] min-h-[140px] ${statusColor} flex flex-col justify-between`}> {/* Width increased to 340px */}
       <div> {/* Added a wrapper div for main content */}
         {/* Title Section: Use flex, justify-end for RTL alignment */}
-        <div className="flex items-center justify-end mb-2">
+        <div className="flex items-center justify mb-2">
           {/* Title: Smaller for consolidated, larger for single/multi-list */}
           <div className={`font-semibold ${consolidatedRules && consolidatedRules.length > 0 ? 'text-base' : 'text-lg'} ${textColor}`}>{description}</div>
           {/* Render Legend ONLY for consolidated rules node, add margin */}
@@ -252,135 +239,100 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
         )}
 
         {/* Display single progress bar (only if not consolidated) */}
+        {/* For minCoursesFromMultipleLists, this will now show the AGGREGATE progress */}
         {!consolidatedRules && showProgressBar && (
           <>
             <div className={`text-base mb-1 ${textColor}`}>התקדמות: {currentProgress}</div>
-            <div className="w-full bg-gray-300 dark:bg-gray-600 rounded-full h-3 relative my-1 overflow-hidden"> {/* Added overflow-hidden */}
-              {/* Determine dynamic classes for rounding (RTL) */}
-              {(() => {
-                const greenRoundedClass = percentDone >= 99.9 && percentPlannedNotDone < 0.1 ? 'rounded-full' : 'rounded-r-full';
-                const yellowRoundedClass = percentPlannedNotDone > 0.1 ? 'rounded-l-full' : '';
-                return (
-                  <>
-                    {/* Done Part (Green - RTL: starts from right) */}
-                    <div 
-                      className={`absolute top-0 right-0 h-3 bg-green-500 dark:bg-green-600 ${greenRoundedClass}`}
-                      style={{ width: `${percentDone}%`, zIndex: 3 }}
-                    ></div>
-                    {/* Planned but not Done Part (Yellow - RTL: extends left from Done part) */}
-                    {percentPlannedNotDone > 0.1 && (
-                      <div 
-                        className={`absolute top-0 h-3 bg-yellow-400 dark:bg-yellow-500 ${yellowRoundedClass}`}
-                        style={{ 
-                          width: `${percentPlannedNotDone}%`, 
-                          right: `${percentDone}%`, // Position from right edge of green bar 
-                          zIndex: 2,
-                        }}
-                      ></div>
-                    )}
-                  </>
-                );
-              })()}
-              {/* If percentDone + percentPlannedNotDone < 100, the gray background shows through */}
-              {/* Removed the empty div for rounding, handled by outer div */}
+            <div className="w-full bg-gray-300 dark:bg-gray-600 rounded-full h-3.5 relative overflow-hidden"> {/* Increased height to h-3.5 */}
+              {/* Done Part (RTL: starts from right) */}
+              <div 
+                className={`absolute top-0 right-0 h-3.5 bg-green-500 dark:bg-green-600 ${percentDone >= 99.9 && percentPlannedNotDone < 0.1 ? 'rounded-full' : 'rounded-r-full'}`}
+                style={{ width: `${percentDone}%`, zIndex: 3 }}
+              ></div>
+              {/* Planned but not Done Part (RTL: extends left from Done part) */}
+              {percentPlannedNotDone > 0.1 && (
+                <div 
+                  className={`absolute top-0 h-3.5 bg-yellow-400 dark:bg-yellow-500 ${percentPlannedNotDone > 0.1 ? 'rounded-l-full' : ''}`}
+                  style={{
+                    width: `${percentPlannedNotDone}%`,
+                    right: `${percentDone}%`, // Position from right edge of green bar
+                    zIndex: 2,
+                  }}
+                ></div>
+              )}
               {/* {(percentDone === 0 && percentPlannedNotDone === 0) && 
-                <div className="h-3 rounded-full"></div> */}
+                <div className="bg-gray-300 dark:bg-gray-600 h-3.5 rounded-full"></div>} */}
             </div>
           </>
         )}
 
-        {/* Display list details (only if not consolidated) - for 'minCoursesFromMultipleLists' type */}
-        {!consolidatedRules && listDetails && listDetails.length > 0 && (
-          <div className="mt-1 space-y-1.5">
-            {listDetails.map((item, index) => {
-              // Updated conditions for list item progress bar
-              const itemShowBar = 
-                typeof item.currentValueDone === 'number' && 
-                typeof item.currentValuePlanned === 'number' && 
-                typeof item.requiredValue === 'number' && 
-                item.requiredValue > 0;
+        {/* Display list details for minCoursesFromMultipleLists (below the aggregate bar) or for other types if they have lists */}
+        {listDetails && listDetails.length > 0 && (
+          <div className={`mt-2 space-y-0.5 ${showProgressBar || (!consolidatedRules && currentProgress) ? 'pt-2' : ''}`}> {/* Removed top border class */}
+            {listDetails.map((detail) => {
+              const detailShowBar = 
+                typeof detail.currentValueDone === 'number' &&
+                typeof detail.currentValuePlanned === 'number' &&
+                typeof detail.requiredValue === 'number' &&
+                detail.requiredValue > 0;
+              
+              const detailReqValNum = detailShowBar ? detail.requiredValue! : 1;
+              const detailDoneValNum = detailShowBar ? detail.currentValueDone! : 0;
+              const detailPlannedValNum = detailShowBar ? detail.currentValuePlanned! : 0;
 
-              const itemReqValNum = itemShowBar ? item.requiredValue! : 1;
-              const itemDoneValNum = itemShowBar ? item.currentValueDone! : 0;
-              const itemPlannedValNum = itemShowBar ? item.currentValuePlanned! : 0;
-
-              const itemPercentDone = itemShowBar 
-                ? Math.min(100, Math.max(0, (itemDoneValNum / itemReqValNum) * 100)) 
+              const detailPercentDone = detailShowBar 
+                ? Math.min(100, Math.max(0, (detailDoneValNum / detailReqValNum) * 100))
                 : 0;
-              const itemPercentPlannedNotDone = itemShowBar
-                ? Math.min(100 - itemPercentDone, Math.max(0, ((itemPlannedValNum - itemDoneValNum) / itemReqValNum) * 100))
+              const detailPercentPlannedNotDone = detailShowBar
+                ? Math.min(100 - detailPercentDone, Math.max(0, ((detailPlannedValNum - detailDoneValNum) / detailReqValNum) * 100))
                 : 0;
               
               // Determine dynamic classes for rounding (RTL)
-              const itemGreenRoundedClass = itemPercentDone >= 99.9 && itemPercentPlannedNotDone < 0.1 ? 'rounded-full' : 'rounded-r-full';
-              const itemYellowRoundedClass = itemPercentPlannedNotDone > 0.1 ? 'rounded-l-full' : '';
+              const greenRoundedClassDetail = detailPercentDone >= 99.9 && detailPercentPlannedNotDone < 0.1 ? 'rounded-full' : 'rounded-r-full';
+              const yellowRoundedClassDetail = detailPercentPlannedNotDone > 0.1 ? 'rounded-l-full' : '';
+
 
               return (
-                <div key={index} className={`flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-b-0`}>
-                  {/* Left part: List Name and Progress Text */}
-                  <div className="flex-grow min-w-0 mr-3">
-                    <p className={`font-medium text-sm truncate ${item.isSatisfied ? 'text-green-700 dark:text-green-300' : textColor}`}>{item.listName}</p>
-                    <p className={`text-xs ${item.isSatisfied ? 'text-green-600 dark:text-green-400' : textColor}`}>{item.currentValueDone}/{item.requiredValue}</p>
-                  </div>
-
-                  {/* Right part: Progress Bar */}
-                  {itemShowBar && (
-                    <div className="w-1/3 flex-shrink-0 bg-gray-300 dark:bg-gray-600 rounded-full h-2 relative overflow-hidden"> {/* Added overflow-hidden */}
-                      {/* Done Part (RTL: starts from right) */}
-                      <div 
-                        className={`absolute top-0 right-0 h-2 bg-green-500 dark:bg-green-600 ${itemGreenRoundedClass}`}
-                        style={{ width: `${itemPercentDone}%`, zIndex: 3 }}
-                      ></div>
-                      {/* Planned but not Done Part (RTL: extends left from Done part) */}
-                      {itemPercentPlannedNotDone > 0.1 && (
-                        <div 
-                          className={`absolute top-0 h-2 bg-yellow-400 dark:bg-yellow-500 ${itemYellowRoundedClass}`}
-                          style={{
-                            width: `${itemPercentPlannedNotDone}%`,
-                            right: `${itemPercentDone}%`, // Position from right edge of green bar
-                            zIndex: 2,
-                          }}
-                        ></div>
-                      )}
-                      {/* {(itemPercentDone === 0 && itemPercentPlannedNotDone === 0) && 
-                        <div className="h-2 rounded-full"></div> } */}
+                <div key={detail.listName} className="py-1.5 border-b border-gray-200 dark:border-gray-700 last:border-b-0 text-sm">
+                  <div className="flex items-center justify-between">
+                    {/* Left part: Description (List Name) and Progress Text */}
+                    <div className="flex-grow min-w-0 mr-3 text-right">
+                      <p className={`font-medium truncate ${detail.isSatisfied ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                        {detail.listName}
+                      </p>
+                      <p className={`text-xs ${detail.isSatisfied ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {detail.currentValueDone}/{detail.requiredValue} קורסים (מתוכנן: {detail.currentValuePlanned})
+                      </p>
                     </div>
-                  )}
-                  {!itemShowBar && <div className="w-1/3 flex-shrink-0 h-2"></div>} {/* Placeholder */}
+                    {/* Right part: Progress Bar for detail */}
+                    {detailShowBar && (
+                      <div className="w-1/3 flex-shrink-0 bg-gray-300 dark:bg-gray-600 rounded-full h-2.5 relative ml-2 overflow-hidden">  {/* RTL: Changed mx-2 to ml-2 */}
+                        {/* Done Part (RTL: starts from right) */}
+                        <div 
+                          className={`absolute top-0 right-0 h-2.5 bg-green-500 dark:bg-green-600 ${greenRoundedClassDetail}`}
+                          style={{ width: `${detailPercentDone}%`, zIndex: 3 }}
+                        ></div>
+                        {/* Planned but not Done Part (RTL: extends left from Done part) */}
+                        {detailPercentPlannedNotDone > 0.1 && (
+                          <div 
+                            className={`absolute top-0 h-2.5 bg-yellow-400 dark:bg-yellow-500 ${yellowRoundedClassDetail}`}
+                            style={{
+                              width: `${detailPercentPlannedNotDone}%`,
+                              right: `${detailPercentDone}%`, 
+                              zIndex: 2,
+                            }}
+                          ></div>
+                        )}
+                      </div>
+                    )}
+                    {!detailShowBar && <div className="w-1/3 flex-shrink-0 h-2.5 ml-2"></div>} {/* Placeholder, RTL: Changed mx-2 to ml-2 */}
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
       </div>
-
-      {/* Edit and Delete Buttons - Show for non-consolidated OR the consolidated node itself */}
-      {( (consolidatedRules && consolidatedRules.length > 0 && data.onEditRule) || 
-        (!consolidatedRules && (data.onEditRule || data.onDeleteRule)) 
-      ) && (
-        <div className="flex justify-end space-x-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
-          {/* Edit button for consolidated node OR regular edit for single node */}
-          {data.onEditRule && (
-            <button 
-              onClick={handleEdit} // Calls data.onEditRule(data.id) - which is the main node id (e.g. 'consolidated-rules-node')
-              className="text-sm px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded"
-              aria-label={consolidatedRules && consolidatedRules.length > 0 ? "ערוך כללי התקדמות" : "Edit rule"}
-            >
-              {consolidatedRules && consolidatedRules.length > 0 ? "ערוך כללי התקדמות" : "ערוך"}
-            </button>
-          )}
-          {/* Delete button ONLY for non-consolidated nodes */}
-          {!consolidatedRules && data.onDeleteRule && (
-            <button 
-              onClick={handleDelete}
-              className="text-sm px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded"
-              aria-label="Delete rule"
-            >
-              מחק
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 };

@@ -190,6 +190,11 @@ export function evaluateRule(
         let overallSatisfied = true;
         const progressStrings: string[] = [];
         const detailsArray: NonNullable<EvaluatedRuleStatus['listProgressDetails']> = [];
+        // Initialize aggregate counters
+        let aggregateDoneCourses = 0;
+        let aggregatePlannedCourses = 0;
+        let aggregateRequiredCourses = 0;
+
         currentValuePlanned = null; // Not applicable for parent rule
         currentValueDone = null;    // Not applicable for parent rule
         requiredValue = null;     // Not applicable for parent rule
@@ -209,9 +214,19 @@ export function evaluateRule(
             listSatisfied = listCurrentDone >= min;
             listProgressText = `${listName}: ${listCurrentDone}/${min} (מתוכנן: ${listCurrentPlanned})`;
             detailsArray.push({ listName, currentValuePlanned: listCurrentPlanned, currentValueDone: listCurrentDone, requiredValue: min, isSatisfied: listSatisfied });
+
+            // Accumulate for aggregate summary
+            aggregateDoneCourses += listCurrentDone;
+            aggregatePlannedCourses += listCurrentPlanned;
+            aggregateRequiredCourses += min;
+
           } else {
             detailsArray.push({ listName: listName || 'לא ידוע', currentValuePlanned: 0, currentValueDone: 0, requiredValue: min || 0, isSatisfied: false });
             listSatisfied = false; 
+            // If a list is not properly defined, we might still want to count its 'min' if available
+            if (min !== undefined) {
+              aggregateRequiredCourses += min;
+            }
           }
           progressStrings.push(listProgressText);
           
@@ -220,9 +235,15 @@ export function evaluateRule(
           }
         });
 
-        currentProgressString = progressStrings.join(' | '); 
-        isSatisfied = overallSatisfied;
-        listProgressDetails = detailsArray;
+        // Update currentProgressString to the new aggregate format
+        currentProgressString = `${aggregateDoneCourses}/${aggregateRequiredCourses} קורסים (מתוכנן: ${aggregatePlannedCourses})`;
+        // Set the main rule's values to the aggregates
+        currentValueDone = aggregateDoneCourses;
+        currentValuePlanned = aggregatePlannedCourses;
+        requiredValue = aggregateRequiredCourses;
+        
+        isSatisfied = overallSatisfied; // Satisfaction still depends on all lists meeting their individual 'min'
+        listProgressDetails = detailsArray; // Keep the detailed breakdown
       } else {
         currentProgressString = `כלל 'minCoursesFromMultipleLists' לא הוגדר כראוי.`;
       }
