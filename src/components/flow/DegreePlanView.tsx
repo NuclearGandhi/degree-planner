@@ -1216,17 +1216,17 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [currentUser, authLoading]);
 
   useEffect(() => {
-    const actualSelectedCourseNode = selectedNodes.find(n => n.type === 'course');
+    const selectedCourseNodes = selectedNodes.filter(n => n.type === 'course');
 
-    if (actualSelectedCourseNode) {
-      const selectedId = actualSelectedCourseNode.id;
+    if (selectedCourseNodes.length > 0) {
+      const selectedIds = new Set(selectedCourseNodes.map(node => node.id));
       
       // Update edges with highlighting and collect relevant course IDs
-      const relevantCourseIds = new Set([selectedId]);
+      const relevantCourseIds = new Set(selectedIds);
       
       setEdges(prevEdges => {
         const updatedEdges = prevEdges.map(edge => {
-          const isActive = edge.source === selectedId || edge.target === selectedId;
+          const isActive = selectedIds.has(edge.source) || selectedIds.has(edge.target);
           if (isActive) {
             // Collect relevant course IDs from connected edges
             relevantCourseIds.add(edge.source);
