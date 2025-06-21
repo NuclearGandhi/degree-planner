@@ -1220,10 +1220,18 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
     if (actualSelectedCourseNode) {
       const selectedId = actualSelectedCourseNode.id;
-      setEdges(prevEdges => 
-        prevEdges.map(edge => {
+      
+      // Update edges with highlighting and collect relevant course IDs
+      const relevantCourseIds = new Set([selectedId]);
+      
+      setEdges(prevEdges => {
+        const updatedEdges = prevEdges.map(edge => {
           const isActive = edge.source === selectedId || edge.target === selectedId;
           if (isActive) {
+            // Collect relevant course IDs from connected edges
+            relevantCourseIds.add(edge.source);
+            relevantCourseIds.add(edge.target);
+            
             return {
               ...edge,
               style: { ...edge.style, stroke: '#f59e0b', strokeWidth: 2.5, strokeOpacity: 1 },
@@ -1237,9 +1245,31 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             markerEnd: { type: MarkerType.ArrowClosed, color: '#d1d5db' }, 
             zIndex: 0, 
           };
-        })
-      );
+        });
+        
+        // Update nodes with opacity changes after we've collected relevant IDs
+        setNodes(prevNodes => 
+          prevNodes.map(node => {
+            if (node.type !== 'course') {
+              return node; // Don't modify non-course nodes
+            }
+            
+            const isRelevant = relevantCourseIds.has(node.id);
+            
+            return {
+              ...node,
+              style: {
+                ...node.style,
+                opacity: isRelevant ? 1 : 0.3, // Significantly lower opacity for irrelevant courses
+              }
+            };
+          })
+        );
+        
+        return updatedEdges;
+      });
     } else {
+      // Reset both edges and nodes when no course is selected
       setEdges(prevEdges => 
         prevEdges.map(edge => ({
           ...edge,
@@ -1248,8 +1278,18 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
           zIndex: 0, 
         }))
       );
+      
+      setNodes(prevNodes => 
+        prevNodes.map(node => ({
+          ...node,
+          style: {
+            ...node.style,
+            opacity: 1, // Reset all nodes to full opacity
+          }
+        }))
+      );
     }
-  }, [selectedNodes, setEdges]);
+  }, [selectedNodes, setEdges, setNodes]);
 
   useEffect(() => {
     if (import.meta.env.DEV) {
