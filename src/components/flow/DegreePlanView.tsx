@@ -144,7 +144,37 @@ const transformDataToNodes = (
     .map(courseId => allCourses.find(c => c._id === courseId))
     .filter(Boolean) : []) as RawCourseData[];
 
-  const semesterEntries = Object.entries(template.semesters);
+  // Sort semesters by their Hebrew letter to ensure consistent ordering
+  const sortSemesterEntries = (entries: [string, string[]][]): [string, string[]][] => {
+    const hebrewLetterOrder = [
+      'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 
+      'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ', 'ק', 'ר', 'ש', 'ת'
+    ];
+    
+    return entries.sort((a, b) => {
+      // Extract Hebrew letter from semester name (e.g., "סמסטר א'" -> "א")
+      const getHebrewLetter = (semesterName: string): string => {
+        const match = semesterName.match(/([א-ת])['׳]?$/);
+        return match ? match[1] : '';
+      };
+      
+      const letterA = getHebrewLetter(a[0]);
+      const letterB = getHebrewLetter(b[0]);
+      
+      const indexA = hebrewLetterOrder.indexOf(letterA);
+      const indexB = hebrewLetterOrder.indexOf(letterB);
+      
+      // If letters are not found in the order array, maintain original order
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      
+      return indexA - indexB;
+    });
+  };
+  
+  const semesterEntries = sortSemesterEntries(Object.entries(template.semesters));
+  console.log('[DEBUG transformDataToNodes] Semester entries order:', semesterEntries.map(e => e[0]));
   const numExistingSemesters = semesterEntries.length;
   const maxSemesterNum = numExistingSemesters > 0 ? Math.max(...semesterEntries.map((_, i) => i + 1)) : 0;
   const addSemesterNodeIsVisible = numExistingSemesters < MAX_SEMESTERS;
@@ -863,6 +893,58 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     setRulesForConsolidatedEditing([]);
   }, [degreeTemplate]);
 
+  // Function to restore proper semester ordering after loading from Firestore
+  const fixSemesterOrdering = (template: DegreeTemplate): DegreeTemplate => {
+    if (!template.semesters || typeof template.semesters !== 'object') {
+      return template;
+    }
+
+    const hebrewLetterOrder = [
+      'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 
+      'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ', 'ק', 'ר', 'ש', 'ת'
+    ];
+    
+    const getHebrewLetter = (semesterName: string): string => {
+      const match = semesterName.match(/([א-ת])['׳]?$/);
+      return match ? match[1] : '';
+    };
+    
+    console.log('[DEBUG] Original semester names:', Object.keys(template.semesters));
+    
+    const semesterEntries = Object.entries(template.semesters).sort((a, b) => {
+      const letterA = getHebrewLetter(a[0]);
+      const letterB = getHebrewLetter(b[0]);
+      
+      console.log(`[DEBUG] Comparing "${a[0]}" (${letterA}) vs "${b[0]}" (${letterB})`);
+      
+      const indexA = hebrewLetterOrder.indexOf(letterA);
+      const indexB = hebrewLetterOrder.indexOf(letterB);
+      
+      console.log(`[DEBUG] Indices: ${indexA} vs ${indexB}`);
+      
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      
+      return indexA - indexB;
+    });
+    
+    console.log('[DEBUG] Sorted semester names:', semesterEntries.map(e => e[0]));
+    
+    // Rebuild the semesters object with proper ordering
+    const orderedSemesters: Record<string, string[]> = {};
+    semesterEntries.forEach(([semesterName, courseIds]) => {
+      orderedSemesters[semesterName] = courseIds;
+    });
+    
+    console.log('[DEBUG] Final ordered semester names:', Object.keys(orderedSemesters));
+    
+    return {
+      ...template,
+      semesters: orderedSemesters
+    };
+  };
+
   useEffect(() => {
     if (isLoading || !degreeTemplate) {
       return;
@@ -957,7 +1039,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
               console.log("[DegreePlanView] Initial Load: Found plan in Firestore.");
             }
             loadedFrom = 'firestore';
-            templateForProcessing = firestorePlan.degreeTemplate;
+            templateForProcessing = fixSemesterOrdering(firestorePlan.degreeTemplate);
             // Ensure ID exists, especially for older Firestore plans
             if (!templateForProcessing.id && fetchedDegreeFileData) {
               for (const key in fetchedDegreeFileData) {
@@ -1013,7 +1095,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
               console.log("[DegreePlanView] Initial Load: Found plan in local storage.");
             }
             loadedFrom = 'local';
-            templateForProcessing = savedPlanData.template;
+            templateForProcessing = fixSemesterOrdering(savedPlanData.template);
             // Ensure ID exists, especially for older local storage plans
             if (import.meta.env.DEV) {
                 console.debug('[DegreePlanView Initial Load] Local plan loaded, template.id BEFORE potential fix:', templateForProcessing?.id);
