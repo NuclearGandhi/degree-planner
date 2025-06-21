@@ -15,6 +15,20 @@ export interface FirestorePlanDocument {
 
 const USER_PLAN_COLLECTION = 'userPlans'; // Collection name in Firestore
 
+// Helper function to detect if error is caused by ad blocker or network blocking
+const isBlockedByClient = (error: unknown): boolean => {
+  const errorMessage = (error as Error)?.message?.toLowerCase() || '';
+  const errorCode = (error as { code?: string })?.code?.toLowerCase() || '';
+  
+  return (
+    errorMessage.includes('blocked by client') ||
+    errorMessage.includes('network error') ||
+    errorMessage.includes('failed to fetch') ||
+    errorCode === 'unavailable' ||
+    errorCode === 'failed-precondition'
+  );
+};
+
 /**
  * Saves the user's degree plan to Firestore.
  * Associates the plan with the user's UID.
@@ -56,8 +70,15 @@ export const savePlanToFirestore = async (
       console.debug('[savePlanToFirestore] Plan saved successfully for user:', userId);
     }
   } catch (error) {
-    console.error('[savePlanToFirestore] Error saving plan to Firestore for user:', userId, error);
-    // Potentially re-throw or handle error for UI feedback
+    if (isBlockedByClient(error)) {
+      console.warn('[savePlanToFirestore] Firestore blocked by ad blocker or network. Data will be saved locally only.');
+      // You could show a user-friendly message here or emit an event
+      // that the UI can listen to and display a notification
+    } else {
+      console.error('[savePlanToFirestore] Error saving plan to Firestore for user:', userId, error);
+      // Potentially re-throw or handle error for UI feedback
+    }
+    // Don't re-throw - let the app continue to use local storage
   }
 };
 
@@ -92,7 +113,12 @@ export const loadPlanFromFirestore = async (userId: string): Promise<FirestorePl
       return null; // No document found
     }
   } catch (error) {
-    console.error('[loadPlanFromFirestore] Error loading plan from Firestore for user:', userId, error);
-    return null; // Error occurred
+    if (isBlockedByClient(error)) {
+      console.warn('[loadPlanFromFirestore] Firestore blocked by ad blocker or network. Falling back to local storage.');
+      return null; // This will trigger fallback to local storage in the calling code
+    } else {
+      console.error('[loadPlanFromFirestore] Error loading plan from Firestore for user:', userId, error);
+      return null; // Error occurred
+    }
   }
 }; 
