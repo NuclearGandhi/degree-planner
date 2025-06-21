@@ -1,41 +1,75 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
-export const AuthButtons: React.FC = () => {
-  const { currentUser, signInWithGoogle, signOut, loading } = useAuth();
+const AuthButtons: React.FC = () => {
+  const { currentUser, signInWithGoogle, signOut } = useAuth();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  if (loading) {
-    // Don't show anything while auth state is loading
-    return <div className="w-20 h-8 animate-pulse bg-gray-300 dark:bg-gray-600 rounded"></div>; // Placeholder for loading
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setIsDropdownOpen(false);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const toggleDropdown = () => {
+    setIsDropdownOpen(!isDropdownOpen);
+  };
+
+  if (currentUser) {
+    return (
+      <div className="relative">
+        <button
+          onClick={toggleDropdown}
+          className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+        >
+          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+            {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : currentUser.email?.charAt(0).toUpperCase() || 'U'}
+          </div>
+        </button>
+        
+        {isDropdownOpen && (
+          <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <p className="font-medium text-gray-900 dark:text-white">
+                {currentUser.displayName || 'משתמש'}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {currentUser.email}
+              </p>
+            </div>
+            <div className="p-2">
+              <button
+                onClick={handleSignOut}
+                className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              >
+                התנתק
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Click outside to close */}
+        {isDropdownOpen && (
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setIsDropdownOpen(false)}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="flex items-center gap-2">
-      {currentUser ? (
-        // User is logged in
-        <>
-          <span className="text-sm text-gray-700 dark:text-gray-300 hidden sm:inline">
-            {currentUser.displayName || currentUser.email}
-          </span>
-          <button
-            onClick={signOut}
-            className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-          >
-            התנתק
-          </button>
-        </>
-      ) : (
-        // User is logged out
-        <button
-          onClick={signInWithGoogle} // Using Google Sign-In for simplicity
-          className="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors flex items-center gap-1"
-        >
-          {/* Basic Google Icon Placeholder */}
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 10.5H21V13.5H13.5V10.5Z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 10.5V3H10.5V10.5H3V13.5H10.5V21H13.5V13.5H21" /></svg>
-          התחבר עם גוגל
-        </button>
-        // TODO: Optionally add Email/Password sign-in button here
-      )}
-    </div>
+    <button
+      onClick={signInWithGoogle}
+      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm font-medium"
+    >
+      התחבר עם Google
+    </button>
   );
-}; 
+};
+
+export default AuthButtons; 

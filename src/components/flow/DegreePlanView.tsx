@@ -22,6 +22,7 @@ import RuleNode from './customNodes/RuleNode';
 import AddCourseNode from './customNodes/AddCourseNode';
 import AddSemesterNode from './customNodes/AddSemesterNode';
 import SemesterTitleNode from './customNodes/SemesterTitleNode';
+import EditCoursesNode from './customNodes/EditCoursesNode';
 import { CourseSelectionModal } from '../../components/ui/CourseSelectionModal';
 import { fetchAllCourses, fetchDegreeTemplates } from '../../utils/dataLoader';
 import { DegreeTemplate, RawCourseData, DegreeRule, PrerequisiteItem, PrerequisiteGroup } from '../../types/data';
@@ -40,7 +41,7 @@ import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
 import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { savePlanToFirestore, loadPlanFromFirestore } from '../../utils/firestoreUtils';
-import { AuthButtons } from '../ui/AuthButtons';
+import AuthButtons from '../ui/AuthButtons';
 
 const nodeTypes = {
   course: CourseNode,
@@ -48,6 +49,7 @@ const nodeTypes = {
   addCourse: AddCourseNode,
   addSemester: AddSemesterNode,
   semesterTitle: SemesterTitleNode,
+  editCourses: EditCoursesNode,
 };
 
 const COLUMN_WIDTH = 340;
@@ -97,7 +99,8 @@ const transformDataToNodes = (
   globalRules: DegreeRule[],
   allTemplatesData: Record<string, DegreeTemplate> | null,
   onEditRuleCallback?: (ruleId: string) => void,
-  onDeleteRuleCallback?: (ruleId: string) => void
+  onDeleteRuleCallback?: (ruleId: string) => void,
+  onEditCoursesCallback?: () => void
 ): Node[] => {
   // --- BEGIN MORE BASIC DEBUG LOG ---
   if (import.meta.env.DEV) {
@@ -218,6 +221,26 @@ const transformDataToNodes = (
   }
 
   let currentRuleNodeDisplayIndex = 0;
+
+  // Add edit courses button node above rules, aligned to the right of consolidated general rules node
+  if (onEditCoursesCallback) {
+    // Calculate position to align right edges with consolidated rules node (general academic progress)
+    // The consolidated node will be the last rule node (index 0 in xOffsetFactor)
+    const consolidatedRuleXOffset = 0; // Last rule node position
+    const consolidatedRuleX = (firstSemesterXPos - ruleNodeBaseXAdjustment) - consolidatedRuleXOffset * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
+    const consolidatedRuleRightEdge = consolidatedRuleX + COLUMN_WIDTH;
+    const editButtonWidth = 200; // min-w-[200px] from EditCoursesNode
+    const editButtonX = consolidatedRuleRightEdge - editButtonWidth; // Align right edges
+    
+    flowNodes.push({
+      id: 'edit-courses-button',
+      type: 'editCourses',
+      position: { x: editButtonX, y: ruleRowStartY - 80 },
+      data: { onEditCourses: onEditCoursesCallback },
+      draggable: false,
+      selectable: false,
+    });
+  }
 
   if (globalHasClassificationRule) {
     const classificationRule = globalRules.find(rule => rule.type === 'classification_courses');
@@ -1272,7 +1295,8 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       currentGlobalRules,
       allTemplatesData,
       handleEditRule,
-      handleDeleteRule
+      handleDeleteRule,
+      handleToggleCourseListEditorModal
     );
     const newEdges = transformDataToEdges(degreeTemplate, allCoursesData);
     if (import.meta.env.DEV) {
@@ -1310,25 +1334,23 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      <div className="fixed top-4 left-4 z-50 flex flex-row-reverse items-center gap-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
+      {/* Top-left: Logo and Theme Toggle */}
+      <div className="fixed top-4 left-4 z-50 items-center gap-2 flex flex-row-reverse bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
         <Logo />
+        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-1" />
         <ThemeToggleButton />
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
+      </div>
+      
+      {/* Top-right: Save Status and Profile */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
         <AuthButtons />
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
-        <div className="flex items-center justify-center min-w-[50px] text-center">
+        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
+        <div className="flex items-center justify-center min-w-[50px] text-center p-2">
           {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}
           {saveStatus === 'saved' && <span className="text-xs text-green-600 dark:text-green-400 p-1 bg-green-100 dark:bg-green-800 rounded">נשמר ✓</span>}
         </div>
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
-        <button 
-          onClick={handleToggleCourseListEditorModal}
-          className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
-        >
-          ערוך רשימות קורסים
-        </button>
       </div>
-      <ReactFlowProvider>
+              <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}
           edges={edges}
