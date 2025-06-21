@@ -123,7 +123,9 @@ const transformDataToNodes = (
     }
   }
   // --- END DEBUG LOG ---
-  console.log('[transformDataToNodes] Function called. import.meta.env.DEV:', import.meta.env.DEV);
+  if (import.meta.env.DEV) {
+    console.log('[transformDataToNodes] Function called. import.meta.env.DEV:', import.meta.env.DEV);
+  }
 
   if (!template || typeof template.semesters !== 'object' || template.semesters === null) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
@@ -463,7 +465,9 @@ const transformDataToEdges = (
   template: DegreeTemplate | undefined,
   allCourses: RawCourseData[]
 ): Edge[] => {
-  console.log('[transformDataToEdges] Starting. Template defined:', !!template, 'AllCourses count:', Array.isArray(allCourses) ? allCourses.length : 'N/A');
+  if (import.meta.env.DEV) {
+    console.log('[transformDataToEdges] Starting. Template defined:', !!template, 'AllCourses count:', Array.isArray(allCourses) ? allCourses.length : 'N/A');
+  }
   if (!template || typeof template.semesters !== 'object' || template.semesters === null || !Array.isArray(allCourses)) {
     if (template && (typeof template.semesters !== 'object' || template.semesters === null)) {
       console.warn('Data Structure Warning (transformDataToEdges): template.semesters is not an object!', template.semesters);
@@ -477,7 +481,9 @@ const transformDataToEdges = (
   const edges: Edge[] = [];
   const edgeIdSet = new Set<string>();
   const allCourseIdsInPlan = Object.values(template.semesters).flat();
-  console.log('[transformDataToEdges] All course IDs in current plan:', allCourseIdsInPlan);
+  if (import.meta.env.DEV) {
+    console.log('[transformDataToEdges] All course IDs in current plan:', allCourseIdsInPlan);
+  }
 
   const isCourseInPlan = (courseId: string): boolean => {
     const result = allCourseIdsInPlan.includes(courseId);
@@ -519,7 +525,9 @@ const transformDataToEdges = (
       processPrerequisites(course.prereqTree, courseId);
     }
   });
-  console.log('[transformDataToEdges] Finished. Total edges generated:', edges.length);
+  if (import.meta.env.DEV) {
+    console.log('[transformDataToEdges] Finished. Total edges generated:', edges.length);
+  }
   return edges;
 };
 
@@ -577,13 +585,17 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [degreeTemplate]);
 
   const handleAddCourseToSemesterCallback = useCallback((semesterNumber: number) => {
-    console.log(`DegreePlanView: Request to add course to semester: ${semesterNumber}`);
+    if (import.meta.env.DEV) {
+      console.log(`DegreePlanView: Request to add course to semester: ${semesterNumber}`);
+    }
     setSemesterToAddCourseTo(semesterNumber);
     setIsModalOpen(true);
   }, []);
 
   const handleAddSemesterCallback = useCallback(() => {
-    console.log('DegreePlanView: Add new semester');
+    if (import.meta.env.DEV) {
+      console.log('DegreePlanView: Add new semester');
+    }
     setDegreeTemplate(prevTemplate => {
       if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate;
       const semesterKeys = Object.keys(prevTemplate.semesters);
@@ -622,7 +634,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       if (!currentCoursesInTargetSemester.includes(selectedCourse._id)) {
         updatedSemesters[targetSemesterKey] = [...currentCoursesInTargetSemester, selectedCourse._id];
       } else {
-        console.log(`Course ${selectedCourse._id} already in semester ${targetSemesterKey}`);
+        if (import.meta.env.DEV) {
+          console.log(`Course ${selectedCourse._id} already in semester ${targetSemesterKey}`);
+        }
       }
 
       return { ...prevTemplate, semesters: updatedSemesters };
@@ -661,7 +675,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [setBinaryStates, setGrades]);
 
   const handleRemoveCourseCallback = useCallback((courseIdToRemove: string) => {
-    console.log(`DegreePlanView: Remove course: ${courseIdToRemove}`);
+    if (import.meta.env.DEV) {
+      console.log(`DegreePlanView: Remove course: ${courseIdToRemove}`);
+    }
     setDegreeTemplate(prevTemplate => {
       if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return undefined;
 
@@ -680,7 +696,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [setDegreeTemplate, setGrades, setSelectedNodes]);
 
   const handleNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    console.log('[DegreePlanView] handleNodeDoubleClick called with node:', node);
+    if (import.meta.env.DEV) {
+      console.log('[DegreePlanView] handleNodeDoubleClick called with node:', node);
+    }
     if (node.type === 'course' && node.data) {
       const courseData = node.data as CourseNodeData;
       const courseId = courseData.courseId;
@@ -728,7 +746,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [allCoursesData, coursesInPlanFlatIds, degreeTemplate, setCourseDetailModalData, setEditingRule, setIsRuleEditorOpen, setRulesForConsolidatedEditing, setIsConsolidatedRuleEditorOpen]);
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    console.log('[DegreePlanView] handleNodeClick called with node:', node);
+    if (import.meta.env.DEV) {
+      console.log('[DegreePlanView] handleNodeClick called with node:', node);
+    }
   }, []);
 
   const handleCloseRuleEditor = useCallback(() => {
@@ -812,7 +832,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         setRulesForConsolidatedEditing(rulesToEdit);
         setIsConsolidatedRuleEditorOpen(true);
       } else {
-        console.warn("Consolidated rule node edit triggered, but no matching rules found in template.");
+        if (import.meta.env.DEV) {
+          console.warn("Consolidated rule node edit triggered, but no matching rules found in template.");
+        }
       }
     } else {
       const ruleToEdit = degreeTemplate.rules.find(r => r.id === ruleId);
@@ -820,7 +842,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         setEditingRule(ruleToEdit);
         setIsRuleEditorOpen(true);
       } else {
-        console.warn(`Rule with ID ${ruleId} not found for editing.`);
+        if (import.meta.env.DEV) {
+          console.warn(`Rule with ID ${ruleId} not found for editing.`);
+        }
       }
     }
   }, [degreeTemplate]);
@@ -852,7 +876,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
     autosaveTimeoutRef.current = window.setTimeout(() => {
       if (currentUser && currentUser.uid) {
-        console.log("[DegreePlanView] Autosaving plan to Firestore for user:", currentUser.uid);
+        if (import.meta.env.DEV) {
+          console.log("[DegreePlanView] Autosaving plan to Firestore for user:", currentUser.uid);
+        }
         savePlanToFirestore(
           currentUser.uid,
           degreeTemplate,
@@ -863,11 +889,15 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         ).then(() => {
           setSaveStatus('saved');
         }).catch(error => {
-          console.error("[DegreePlanView] Error autosaving to Firestore:", error);
+          if (import.meta.env.DEV) {
+            console.error("[DegreePlanView] Error autosaving to Firestore:", error);
+          }
           setSaveStatus('idle');
         });
       } else {
-        console.log("[DegreePlanView] Autosaving plan to local storage (no user logged in)...");
+        if (import.meta.env.DEV) {
+          console.log("[DegreePlanView] Autosaving plan to local storage (no user logged in)...");
+        }
         savePlan(degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates);
         setSaveStatus('saved');
       }
@@ -882,10 +912,14 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   useEffect(() => {
     const loadInitialData = async () => {
-      console.log("[DegreePlanView] Initial Load Effect Triggered. Auth Loading:", authLoading, "CurrentUser:", !!currentUser);
+      if (import.meta.env.DEV) {
+        console.log("[DegreePlanView] Initial Load Effect Triggered. Auth Loading:", authLoading, "CurrentUser:", !!currentUser);
+      }
   
       if (authLoading) {
-        console.log("[DegreePlanView] Initial Load: Waiting for auth state...");
+        if (import.meta.env.DEV) {
+          console.log("[DegreePlanView] Initial Load: Waiting for auth state...");
+        }
         setIsLoading(true);
         return;
       }
@@ -894,11 +928,15 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   
       try {
         const courses = await fetchAllCourses();
-        console.log("[DegreePlanView] Initial Load: Fetched allCourses:", courses.length);
+        if (import.meta.env.DEV) {
+          console.log("[DegreePlanView] Initial Load: Fetched allCourses:", courses.length);
+        }
         setAllCoursesData(courses);
   
         const fetchedDegreeFileData = await fetchDegreeTemplates();
-        console.log("[DegreePlanView] Initial Load: Fetched degree file data.");
+        if (import.meta.env.DEV) {
+          console.log("[DegreePlanView] Initial Load: Fetched degree file data.");
+        }
   
         let templateForProcessing: DegreeTemplate | undefined = undefined;
         const globalRulesForProcessing: DegreeRule[] = fetchedDegreeFileData?.globalRules || [];
@@ -909,11 +947,15 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         let loadedFrom: 'firestore' | 'local' | 'default' = 'default';
   
         if (currentUser && currentUser.uid) {
-          console.log("[DegreePlanView] Initial Load: User logged in (" + currentUser.uid + "). Trying Firestore...");
+          if (import.meta.env.DEV) {
+            console.log("[DegreePlanView] Initial Load: User logged in (" + currentUser.uid + "). Trying Firestore...");
+          }
           const firestorePlan = await loadPlanFromFirestore(currentUser.uid);
   
           if (firestorePlan && firestorePlan.degreeTemplate) {
-            console.log("[DegreePlanView] Initial Load: Found plan in Firestore.");
+            if (import.meta.env.DEV) {
+              console.log("[DegreePlanView] Initial Load: Found plan in Firestore.");
+            }
             loadedFrom = 'firestore';
             templateForProcessing = firestorePlan.degreeTemplate;
             // Ensure ID exists, especially for older Firestore plans
@@ -923,7 +965,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
                   const pristineTemplate = fetchedDegreeFileData[key] as DegreeTemplate;
                   if (pristineTemplate.name === templateForProcessing.name) {
                     templateForProcessing.id = pristineTemplate.id; // Which is 'key'
-                    console.log(`[DegreePlanView] Initial Load: Assigned missing ID '${templateForProcessing.id}' to Firestore template based on name match.`);
+                    if (import.meta.env.DEV) {
+                      console.log(`[DegreePlanView] Initial Load: Assigned missing ID '${templateForProcessing.id}' to Firestore template based on name match.`);
+                    }
                     break;
                   }
                 }
@@ -934,7 +978,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             classificationCreditsForProcessing = firestorePlan.classificationCredits || {};
             binaryStatesForProcessing = firestorePlan.binaryStates || {};
           } else {
-            console.log("[DegreePlanView] Initial Load: No plan found in Firestore for user. Loading default template.");
+            if (import.meta.env.DEV) {
+              console.log("[DegreePlanView] Initial Load: No plan found in Firestore for user. Loading default template.");
+            }
             loadedFrom = 'default';
             const defaultTemplateId = 'mechanical-engineering-general';
             templateForProcessing = fetchedDegreeFileData?.[defaultTemplateId] as DegreeTemplate | undefined;
@@ -944,7 +990,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             binaryStatesForProcessing = {};
   
             if (templateForProcessing) {
-              console.log("[DegreePlanView] Initial Load: Triggering initial save of default template to Firestore for user:", currentUser.uid);
+              if (import.meta.env.DEV) {
+                console.log("[DegreePlanView] Initial Load: Triggering initial save of default template to Firestore for user:", currentUser.uid);
+              }
               await savePlanToFirestore(
                 currentUser.uid,
                 templateForProcessing,
@@ -956,10 +1004,14 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             }
           }
         } else {
-          console.log("[DegreePlanView] Initial Load: No user logged in. Trying local storage...");
+          if (import.meta.env.DEV) {
+            console.log("[DegreePlanView] Initial Load: No user logged in. Trying local storage...");
+          }
           const savedPlanData: StoredPlan | null = loadPlan();
           if (savedPlanData && savedPlanData.template) {
-            console.log("[DegreePlanView] Initial Load: Found plan in local storage.");
+            if (import.meta.env.DEV) {
+              console.log("[DegreePlanView] Initial Load: Found plan in local storage.");
+            }
             loadedFrom = 'local';
             templateForProcessing = savedPlanData.template;
             // Ensure ID exists, especially for older local storage plans
@@ -973,7 +1025,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
                   // Ensure pristineTemplate and its name are defined
                   if (pristineTemplate && pristineTemplate.name && pristineTemplate.id && templateForProcessing.name === pristineTemplate.name) {
                     templateForProcessing.id = pristineTemplate.id; // pristineTemplate.id should be 'key' due to dataLoader changes
-                    console.log(`[DegreePlanView] Initial Load: Assigned missing ID '${templateForProcessing.id}' to local storage template '${templateForProcessing.name}' based on name match with pristine template '${key}'.`);
+                    if (import.meta.env.DEV) {
+                      console.log(`[DegreePlanView] Initial Load: Assigned missing ID '${templateForProcessing.id}' to local storage template '${templateForProcessing.name}' based on name match with pristine template '${key}'.`);
+                    }
                     break;
                   }
                 }
@@ -988,7 +1042,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             classificationCreditsForProcessing = savedPlanData.classificationCredits || {};
             binaryStatesForProcessing = savedPlanData.binaryStates || {};
           } else {
-            console.log("[DegreePlanView] Initial Load: No plan found in local storage. Loading default template.");
+            if (import.meta.env.DEV) {
+              console.log("[DegreePlanView] Initial Load: No plan found in local storage. Loading default template.");
+            }
             loadedFrom = 'default';
             const defaultTemplateId = 'mechanical-engineering-general';
             templateForProcessing = fetchedDegreeFileData?.[defaultTemplateId] as DegreeTemplate | undefined;
@@ -1000,7 +1056,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         }
   
         if (templateForProcessing) {
-          console.log(`[DegreePlanView] Initial Load: Setting state. Loaded from: ${loadedFrom}`);
+          if (import.meta.env.DEV) {
+            console.log(`[DegreePlanView] Initial Load: Setting state. Loaded from: ${loadedFrom}`);
+          }
           if (import.meta.env.DEV) {
             console.debug('[DegreePlanView Initial Load] templateForProcessing right before processing definedMandatoryCourseIds:', JSON.parse(JSON.stringify(templateForProcessing)));
           }
@@ -1032,13 +1090,19 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
           setClassificationCredits(classificationCreditsForProcessing);
           setBinaryStates(binaryStatesForProcessing);
         } else {
-          console.error("[DegreePlanView] Initial Load: No template could be loaded (neither saved nor default).");
+          if (import.meta.env.DEV) {
+            console.error("[DegreePlanView] Initial Load: No template could be loaded (neither saved nor default).");
+          }
         }
   
       } catch (error) {
-        console.error("[DegreePlanView] Initial Load: Error loading initial data:", error);
+        if (import.meta.env.DEV) {
+          console.error("[DegreePlanView] Initial Load: Error loading initial data:", error);
+        }
       } finally {
-        console.log("[DegreePlanView] Initial Load: Finished processing. Setting isLoading to false.");
+        if (import.meta.env.DEV) {
+          console.log("[DegreePlanView] Initial Load: Finished processing. Setting isLoading to false.");
+        }
         setIsLoading(false);
       }
     };
@@ -1083,24 +1147,32 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [selectedNodes, setEdges]);
 
   useEffect(() => {
-    console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. import.meta.env.DEV:", import.meta.env.DEV);
-    console.log("[DegreePlanView] Node/Edge Update Effect: Guard conditions - isLoading:", isLoading, "!degreeTemplate:", !degreeTemplate, "!Array.isArray(allCoursesData):", !Array.isArray(allCoursesData), "allCoursesData.length === 0:", Array.isArray(allCoursesData) && allCoursesData.length === 0);
+    if (import.meta.env.DEV) {
+      console.log("[DegreePlanView] Node/Edge Update Effect: Triggered. import.meta.env.DEV:", import.meta.env.DEV);
+      console.log("[DegreePlanView] Node/Edge Update Effect: Guard conditions - isLoading:", isLoading, "!degreeTemplate:", !degreeTemplate, "!Array.isArray(allCoursesData):", !Array.isArray(allCoursesData), "allCoursesData.length === 0:", Array.isArray(allCoursesData) && allCoursesData.length === 0);
+    }
     
     if (isLoading || !degreeTemplate || !Array.isArray(allCoursesData) || allCoursesData.length === 0) {
-      console.log("[DegreePlanView] Node/Edge Update Effect: Guarded. Not generating nodes/edges yet.");
-      if (isLoading) console.log("Reason: isLoading is true.");
-      if (!degreeTemplate) console.log("Reason: currentTemplate is falsy.");
-      if (!Array.isArray(allCoursesData)) console.log("Reason: allCourses is not an array.");
-      if (Array.isArray(allCoursesData) && allCoursesData.length === 0) console.log("Reason: allCourses is an empty array.");
+      if (import.meta.env.DEV) {
+        console.log("[DegreePlanView] Node/Edge Update Effect: Guarded. Not generating nodes/edges yet.");
+        if (isLoading) console.log("Reason: isLoading is true.");
+        if (!degreeTemplate) console.log("Reason: currentTemplate is falsy.");
+        if (!Array.isArray(allCoursesData)) console.log("Reason: allCourses is not an array.");
+        if (Array.isArray(allCoursesData) && allCoursesData.length === 0) console.log("Reason: allCourses is an empty array.");
+      }
       if (!isLoading && nodes.length > 0) {
-         console.log("[DegreePlanView] Node/Edge Update Effect: Clearing existing nodes as conditions not met.");
+         if (import.meta.env.DEV) {
+           console.log("[DegreePlanView] Node/Edge Update Effect: Clearing existing nodes as conditions not met.");
+         }
          setNodes([]);
          setEdges([]);
       }
       return;
     }
 
-    console.log("[DegreePlanView] Node/Edge Update Effect: Guard passed. Generating nodes and edges...");
+    if (import.meta.env.DEV) {
+      console.log("[DegreePlanView] Node/Edge Update Effect: Guard passed. Generating nodes and edges...");
+    }
     const newNodes = transformDataToNodes(
       degreeTemplate,
       allCoursesData,
@@ -1121,7 +1193,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       handleDeleteRule
     );
     const newEdges = transformDataToEdges(degreeTemplate, allCoursesData);
-    console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
+    if (import.meta.env.DEV) {
+      console.log("[DegreePlanView] Node/Edge Update Effect: Generated newNodes count:", newNodes.length, "newEdges count:", newEdges.length);
+    }
     
     setNodes(() => newNodes);
     setEdges(() => newEdges);
