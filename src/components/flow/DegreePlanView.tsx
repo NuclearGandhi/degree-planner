@@ -1213,6 +1213,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     };
   
     loadInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, authLoading]);
 
   useEffect(() => {
@@ -1226,9 +1227,22 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       
       setEdges(prevEdges => {
         const updatedEdges = prevEdges.map(edge => {
-          const isActive = selectedIds.has(edge.source) || selectedIds.has(edge.target);
-          if (isActive) {
-            // Collect relevant course IDs from connected edges
+          const isLeadingToSelected = selectedIds.has(edge.target);
+          const isGoingOutFromSelected = selectedIds.has(edge.source);
+          
+          if (isLeadingToSelected) {
+            // Collect relevant course IDs from edges leading to selected courses
+            relevantCourseIds.add(edge.source);
+            relevantCourseIds.add(edge.target);
+            
+            return {
+              ...edge,
+              style: { ...edge.style, stroke: '#ef4444', strokeWidth: 2.5, strokeOpacity: 1 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#ef4444' }, 
+              zIndex: 10, 
+            };
+          } else if (isGoingOutFromSelected) {
+            // Collect relevant course IDs from edges going out from selected courses
             relevantCourseIds.add(edge.source);
             relevantCourseIds.add(edge.target);
             
@@ -1350,8 +1364,8 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     classificationCredits, currentGlobalRules,
     handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChange, 
     handleRemoveCourseCallback, handleBinaryChange, handleClassificationToggle, 
-    handleClassificationCreditsChange, handleEditRule, handleDeleteRule,
-    setNodes, setEdges, isLoading, allTemplatesData 
+    handleClassificationCreditsChange, handleEditRule, handleDeleteRule, handleToggleCourseListEditorModal,
+    setNodes, setEdges, isLoading, allTemplatesData, nodes.length
   ]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: OnSelectionChangeParams) => {
