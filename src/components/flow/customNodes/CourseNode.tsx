@@ -26,6 +26,10 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
     event.stopPropagation();
   };
 
+  const onInputInteraction = (event: React.SyntheticEvent<HTMLInputElement>) => {
+    event.stopPropagation();
+  };
+
   const prereqStatus: PrereqStatus = data.prerequisitesMet;
 
   let statusBorderColor = selected ? '!border-blue-500 ring-2 ring-blue-500' : '!border-gray-300 dark:!border-gray-600';
@@ -98,10 +102,15 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
             type="number"
             value={data.grade || ''}
             onChange={handleGradeInputChange}
+            onMouseDown={onInputInteraction}
+            onClick={onInputInteraction}
+            onFocus={onInputInteraction}
+            onKeyDown={onInputInteraction}
             min="0"
             max="100"
             step="1"
             placeholder="--"
+            tabIndex={data.tabIndex}
             className="nodrag px-1 py-0.5 text-xs w-12 rounded border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500"
             aria-label={`ציון עבור ${data.label}`}
             disabled={data.isBinary}
@@ -113,6 +122,9 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
             id={`binary-${data.courseId}`}
             checked={!!data.isBinary}
             onChange={(e) => data.onBinaryChange && data.onBinaryChange(data.courseId, e.target.checked)}
+            onMouseDown={onInputInteraction}
+            onClick={onInputInteraction}
+            onFocus={onInputInteraction}
             className="nodrag w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 mr-2"
           />
           <label htmlFor={`binary-${data.courseId}`} className="mr-1.5 text-xs !text-gray-600 dark:!text-gray-400 select-none">

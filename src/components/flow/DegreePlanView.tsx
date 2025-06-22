@@ -410,6 +410,9 @@ const transformDataToNodes = (
 
   currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
 
+  // Calculate tabIndex for keyboard navigation through grade inputs
+  let globalTabIndex = 1;
+
   semesterEntries.forEach(([semesterName, courseIds], semesterIndex) => {
     const semesterNumberForLayout = semesterIndex + 1;
     const semesterXPos = baseSemesterAreaStartX + (maxSemesterNum - semesterNumberForLayout) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
@@ -472,6 +475,7 @@ const transformDataToNodes = (
         prerequisitesMet: prereqStatusResult,
         isBinary: currentBinaryStates[courseId] || false,
         onBinaryChange: handleBinaryChange,
+        tabIndex: globalTabIndex++,
       };
 
       flowNodes.push({
@@ -915,6 +919,70 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     setIsConsolidatedRuleEditorOpen(false);
     setRulesForConsolidatedEditing([]);
   }, [degreeTemplate]);
+
+  const handleExportPlan = useCallback(() => {
+    if (!degreeTemplate) {
+      alert('אין תוכנית לימודים לייצוא');
+      return;
+    }
+
+    const exportData = {
+      degreeTemplate,
+      grades,
+      classificationChecked,
+      classificationCredits,
+      binaryStates,
+      timestamp: Date.now(),
+      exportDate: new Date().toISOString(),
+      appVersion: '1.0.0', // You can update this as needed
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `degree-plan-${degreeTemplate.name || 'unknown'}-${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates]);
+
+  const handleImportPlan = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target?.result as string);
+        
+        // Validate the imported data structure
+        if (!importedData.degreeTemplate) {
+          alert('קובץ לא תקין: חסרה תוכנית לימודים');
+          return;
+        }
+
+        // Confirm import with user
+        const templateName = importedData.degreeTemplate.name || 'לא ידוע';
+        const exportDate = importedData.exportDate ? new Date(importedData.exportDate).toLocaleDateString('he-IL') : 'לא ידוע';
+        
+        if (!window.confirm(`האם אתה בטוח שברצונך לייבא את התוכנית "${templateName}" מתאריך ${exportDate}?\nפעולה זו תחליף את התוכנית הנוכחית.`)) {
+          return;
+        }
+
+        // Apply the imported data
+        setDegreeTemplate(importedData.degreeTemplate);
+        setGrades(importedData.grades || {});
+        setClassificationChecked(importedData.classificationChecked || {});
+        setClassificationCredits(importedData.classificationCredits || {});
+        setBinaryStates(importedData.binaryStates || {});
+        
+        alert(`התוכנית "${templateName}" יובאה בהצלחה!`);
+      } catch (error) {
+        console.error('Error importing plan:', error);
+        alert('שגיאה בייבוא הקובץ: הקובץ פגום או לא תקין');
+      }
+    };
+    reader.readAsText(file);
+  }, [setDegreeTemplate, setGrades, setClassificationChecked, setClassificationCredits, setBinaryStates]);
 
   // Function to restore proper semester ordering after loading from Firestore
   const fixSemesterOrdering = (template: DegreeTemplate): DegreeTemplate => {
@@ -1397,7 +1465,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       
       {/* Top-right: Save Status and Profile */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
-        <AuthButtons />
+        <AuthButtons onExportPlan={handleExportPlan} onImportPlan={handleImportPlan} />
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
         <div className="flex items-center justify-center min-w-[50px] text-center p-2">
           {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}

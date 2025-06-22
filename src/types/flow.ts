@@ -16,6 +16,7 @@ export interface CourseNodeData {
   isBinary: boolean;
   onBinaryChange: (id: string, isBinary: boolean) => void;
   onDoubleClick?: (courseId: string) => void;
+  tabIndex?: number; // For keyboard navigation through grade inputs
   [key: string]: unknown; // Use unknown instead of any
 }
 
