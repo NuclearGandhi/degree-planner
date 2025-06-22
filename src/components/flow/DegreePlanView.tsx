@@ -177,7 +177,9 @@ const transformDataToNodes = (
   };
   
   const semesterEntries = sortSemesterEntries(Object.entries(template.semesters));
-  console.log('[DEBUG transformDataToNodes] Semester entries order:', semesterEntries.map(e => e[0]));
+  if (import.meta.env.DEV) {
+    console.debug('[DEBUG transformDataToNodes] Semester entries order:', semesterEntries.map(e => e[0]));
+  }
   const numExistingSemesters = semesterEntries.length;
   const maxSemesterNum = numExistingSemesters > 0 ? Math.max(...semesterEntries.map((_, i) => i + 1)) : 0;
   const addSemesterNodeIsVisible = numExistingSemesters < MAX_SEMESTERS;
@@ -610,6 +612,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   const [currentGlobalRules, setCurrentGlobalRules] = useState<DegreeRule[]>([]);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
   const autosaveTimeoutRef = useRef<number | null>(null);
   const classificationCreditsDebounceTimeoutRef = useRef<number | null>(null);
 
@@ -1000,18 +1003,24 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       return match ? match[1] : '';
     };
     
-    console.log('[DEBUG] Original semester names:', Object.keys(template.semesters));
+    if (import.meta.env.DEV) {
+      console.debug('[DEBUG] Original semester names:', Object.keys(template.semesters));
+    }
     
     const semesterEntries = Object.entries(template.semesters).sort((a, b) => {
       const letterA = getHebrewLetter(a[0]);
       const letterB = getHebrewLetter(b[0]);
       
-      console.log(`[DEBUG] Comparing "${a[0]}" (${letterA}) vs "${b[0]}" (${letterB})`);
+      if (import.meta.env.DEV) {
+        console.debug(`[DEBUG] Comparing "${a[0]}" (${letterA}) vs "${b[0]}" (${letterB})`);
+      }
       
       const indexA = hebrewLetterOrder.indexOf(letterA);
       const indexB = hebrewLetterOrder.indexOf(letterB);
       
-      console.log(`[DEBUG] Indices: ${indexA} vs ${indexB}`);
+      if (import.meta.env.DEV) {
+        console.debug(`[DEBUG] Indices: ${indexA} vs ${indexB}`);
+      }
       
       if (indexA === -1 && indexB === -1) return 0;
       if (indexA === -1) return 1;
@@ -1020,7 +1029,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       return indexA - indexB;
     });
     
-    console.log('[DEBUG] Sorted semester names:', semesterEntries.map(e => e[0]));
+    if (import.meta.env.DEV) {
+      console.debug('[DEBUG] Sorted semester names:', semesterEntries.map(e => e[0]));
+    }
     
     // Rebuild the semesters object with proper ordering
     const orderedSemesters: Record<string, string[]> = {};
@@ -1028,7 +1039,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       orderedSemesters[semesterName] = courseIds;
     });
     
-    console.log('[DEBUG] Final ordered semester names:', Object.keys(orderedSemesters));
+    if (import.meta.env.DEV) {
+      console.debug('[DEBUG] Final ordered semester names:', Object.keys(orderedSemesters));
+    }
     
     return {
       ...template,
@@ -1037,7 +1050,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   };
 
   useEffect(() => {
-    if (isLoading || !degreeTemplate) {
+    if (isLoading || !degreeTemplate || isInitialLoad) {
       return;
     }
 
@@ -1081,7 +1094,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, currentUser, authLoading, setSaveStatus, isLoading]);
+  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, currentUser, authLoading, setSaveStatus, isLoading, isInitialLoad]);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -1277,11 +1290,12 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
           console.log("[DegreePlanView] Initial Load: Finished processing. Setting isLoading to false.");
         }
         setIsLoading(false);
+        setIsInitialLoad(false);
       }
     };
   
     loadInitialData();
-  }, [currentUser, authLoading, isLoading]);
+  }, [currentUser, authLoading]);
 
   useEffect(() => {
     const selectedCourseNodes = selectedNodes.filter(n => n.type === 'course');
@@ -1432,7 +1446,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChange, 
     handleRemoveCourseCallback, handleBinaryChange, handleClassificationToggle, 
     handleClassificationCreditsChange, handleEditRule, handleDeleteRule, handleToggleCourseListEditorModal,
-    setNodes, setEdges, isLoading, allTemplatesData, nodes.length
+    setNodes, setEdges, isLoading, allTemplatesData
   ]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: OnSelectionChangeParams) => {
