@@ -30,7 +30,7 @@ import { CourseNodeData, RuleNodeData } from '../../types/flow';
 import { evaluateRule } from '../../utils/ruleEvaluator';
 import { AveragesDisplay } from '../../components/ui/AveragesDisplay';
 import { savePlan, loadPlan, StoredPlan } from '../../utils/planStorage';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import { numberToHebrewLetter } from '../../utils/hebrewUtils';
 import { checkPrerequisites, PrereqStatus } from '../../utils/prerequisiteChecker';
 import { CourseDetailModal } from '../../components/ui/CourseDetailModal';
@@ -39,7 +39,7 @@ import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
 import Logo from '../../components/ui/Logo';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
 import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { savePlanToFirestore, loadPlanFromFirestore } from '../../utils/firestoreUtils';
 import AuthButtons from '../ui/AuthButtons';
 
@@ -1081,7 +1081,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, currentUser, authLoading, setSaveStatus]);
+  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, currentUser, authLoading, setSaveStatus, isLoading]);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -1281,8 +1281,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     };
   
     loadInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, authLoading]);
+  }, [currentUser, authLoading, isLoading]);
 
   useEffect(() => {
     const selectedCourseNodes = selectedNodes.filter(n => n.type === 'course');

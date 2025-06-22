@@ -1,21 +1,56 @@
-import React, { ChangeEvent, useState } from 'react';
+import React, { ChangeEvent, useState, useEffect, useRef } from 'react';
 import { Handle, Position, NodeProps, Node as RFNode } from '@xyflow/react';
 import { CourseNodeData } from '../../../types/flow';
 import { PrereqStatus } from '../../../utils/prerequisiteChecker';
 
 const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeData, 'course'>>) => {
   const [showPrereqTooltip, setShowPrereqTooltip] = useState(false);
+  const [localGrade, setLocalGrade] = useState(data.grade || '');
+  const debounceTimeoutRef = useRef<number | null>(null);
+
+  // Sync local state with prop changes
+  useEffect(() => {
+    setLocalGrade(data.grade || '');
+  }, [data.grade]);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleGradeInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
-    if (value === '') {
-      if (data.onGradeChange) data.onGradeChange(data.courseId, '');
-      return;
+    
+    // Update local state immediately for responsive UI
+    setLocalGrade(value);
+    
+    // Clear existing timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
-    const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && Number.isInteger(numValue) && numValue >= 0 && numValue <= 100) {
-      if (data.onGradeChange) data.onGradeChange(data.courseId, value); 
-    }
+    
+    // Debounce the parent state update
+    debounceTimeoutRef.current = window.setTimeout(() => {
+      // Always allow empty string
+      if (value === '') {
+        if (data.onGradeChange) data.onGradeChange(data.courseId, '');
+        return;
+      }
+      
+      // Allow intermediate typing states - only reject clearly invalid input
+      // This allows partial numbers like "8" when typing "87"
+      const numValue = parseInt(value, 10);
+      if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
+        if (data.onGradeChange) data.onGradeChange(data.courseId, value); 
+      } else {
+        // If invalid, revert local state to last valid value
+        setLocalGrade(data.grade || '');
+      }
+    }, 300); // 300ms debounce
   };
 
   const handleRemoveClick = () => {
@@ -100,7 +135,7 @@ const CourseNode = ({ data, selected, dragging }: NodeProps<RFNode<CourseNodeDat
           <input 
             id={`grade-${data.courseId}`}
             type="number"
-            value={data.grade || ''}
+            value={localGrade}
             onChange={handleGradeInputChange}
             onMouseDown={onInputInteraction}
             onClick={onInputInteraction}
