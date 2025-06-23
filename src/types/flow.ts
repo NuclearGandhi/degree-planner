@@ -107,6 +107,9 @@ export interface AddSemesterNodeData {
 
 export interface SemesterTitleNodeData {
   title: string;
+  semesterKey: string;
+  isEmpty: boolean;
+  onRemoveSemester?: (semesterKey: string) => void;
   [key: string]: unknown; // Use unknown instead of any
 }
 

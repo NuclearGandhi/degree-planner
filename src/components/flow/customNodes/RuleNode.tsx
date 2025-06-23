@@ -4,6 +4,12 @@ import { RuleNodeData } from '../../../types/flow'; // Adjusted import path, rem
 import CustomNumberInput from '../../ui/CustomNumberInput'; // Added import
 import ProgressBarLegend from '../../ui/ProgressBarLegend'; // Import the legend component
 
+const EditIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+    <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+  </svg>
+);
+
 // New sub-component for each classification item row
 interface ClassificationItemRowProps {
   item: NonNullable<RuleNodeData['classificationCourseDetails']>[number];
@@ -144,16 +150,30 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
     <div dir="rtl" className={`rule-node p-3 border-r-4 rounded-md shadow-lg w-[340px] min-h-[140px] ${statusColor} flex flex-col justify-between`}> {/* Width increased to 340px */}
       <div> {/* Added a wrapper div for main content */}
         {/* Title Section: Use flex, justify-end for RTL alignment */}
-        <div className="flex items-center justify mb-2">
-          {/* Title: Smaller for consolidated, larger for single/multi-list */}
-          <div className={`font-semibold ${consolidatedRules && consolidatedRules.length > 0 ? 'text-base' : 'text-lg'} ${textColor}`}>{description}</div>
-          {/* Render Legend ONLY for consolidated rules node, add margin */}
-          {consolidatedRules && consolidatedRules.length > 0 && (
-            <div className="mr-4"> {/* Added margin for spacing */} 
-              <ProgressBarLegend />
-            </div>
-          )}
+        <div className="flex items-center justify-start mb-2">
+          <div className="flex items-center">
+            {/* Title: Smaller for consolidated, larger for single/multi-list */}
+            <div className={`font-semibold ${consolidatedRules && consolidatedRules.length > 0 ? 'text-base' : 'text-lg'} ${textColor}`}>{description}</div>
+            {/* Edit button - only show if onEditRule is available */}
+            {data.onEditRule && (
+              <button
+                onClick={() => data.onEditRule!(data.id)}
+                className="mr-2 p-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors duration-150 opacity-70 hover:opacity-100"
+                title={`ערוך כלל: ${description}`}
+                aria-label={`ערוך כלל: ${description}`}
+              >
+                <EditIcon />
+              </button>
+            )}
+          </div>
         </div>
+        
+        {/* Render Legend ONLY for consolidated rules node on separate line */}
+        {consolidatedRules && consolidatedRules.length > 0 && (
+          <div className="mb-3 flex justify-start mt-3">
+            <ProgressBarLegend />
+          </div>
+        )}
         
         {/* Display consolidated rules if they exist */}
         {consolidatedRules && consolidatedRules.length > 0 && (

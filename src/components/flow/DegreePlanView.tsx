@@ -37,7 +37,7 @@ import { CourseDetailModal } from '../../components/ui/CourseDetailModal';
 import RuleEditorModal from '../../components/ui/RuleEditorModal';
 import CourseListEditorModal from '../../components/ui/CourseListEditorModal';
 import Logo from '../../components/ui/Logo';
-import { ThemeToggleButton } from '../../components/ui/ThemeToggleButton';
+
 import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEditorModal';
 import { useAuth } from '../../hooks/useAuth';
 import { savePlanToFirestore, loadPlanFromFirestore } from '../../utils/firestoreUtils';
@@ -100,7 +100,8 @@ const transformDataToNodes = (
   allTemplatesData: Record<string, DegreeTemplate> | null,
   onEditRuleCallback?: (ruleId: string) => void,
   onDeleteRuleCallback?: (ruleId: string) => void,
-  onEditCoursesCallback?: () => void
+  onEditCoursesCallback?: () => void,
+  onRemoveSemesterCallback?: (semesterKey: string) => void
 ): Node[] => {
   // --- BEGIN MORE BASIC DEBUG LOG ---
   if (import.meta.env.DEV) {
@@ -387,7 +388,7 @@ const transformDataToNodes = (
         }
       });
       
-      const estimatedHeightConsolidated = 60 + consolidatedRuleDetails.length * 60;
+      const estimatedHeightConsolidated = 90 + consolidatedRuleDetails.length * 60; // Increased from 60 to 90 to account for legend on separate line
       maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeightConsolidated);
 
       const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
@@ -399,6 +400,8 @@ const transformDataToNodes = (
         targetProgress: consolidatedRuleDetails.length,
         isConsolidated: true,
         consolidatedRules: consolidatedRuleDetails,
+        onEditRule: onEditRuleCallback,
+        onDeleteRule: onDeleteRuleCallback,
       };
       flowNodes.push({
         id: consolidatedNodeId,
@@ -423,7 +426,12 @@ const transformDataToNodes = (
       id: `title-sem-${semesterNumberForLayout}`,
       type: 'semesterTitle',
       position: { x: semesterXPos, y: currentContentY },
-      data: { title: semesterName },
+      data: { 
+        title: semesterName,
+        semesterKey: semesterName,
+        isEmpty: courseIds.length === 0,
+        onRemoveSemester: onRemoveSemesterCallback
+      },
       draggable: false,
       selectable: false,
     });
@@ -672,6 +680,29 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         }
       };
     });
+  }, []);
+
+  const handleRemoveSemesterCallback = useCallback((semesterKey: string) => {
+    if (import.meta.env.DEV) {
+      console.log(`DegreePlanView: Remove semester: ${semesterKey}`);
+    }
+    if (window.confirm(`האם אתה בטוח שברצונך למחוק את ${semesterKey}?`)) {
+      setDegreeTemplate(prevTemplate => {
+        if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate;
+
+        const updatedSemesters = { ...prevTemplate.semesters };
+        delete updatedSemesters[semesterKey];
+
+        const newTemplate = { ...prevTemplate, semesters: updatedSemesters };
+        
+        if (import.meta.env.DEV) {
+          console.log(`DegreePlanView: Semester ${semesterKey} removed. Updated template:`, newTemplate);
+          console.log(`DegreePlanView: Remaining semesters:`, Object.keys(updatedSemesters));
+        }
+
+        return newTemplate;
+      });
+    }
   }, []);
 
   const handleSelectCourseFromModal = useCallback((selectedCourse: RawCourseData) => {
@@ -1051,7 +1082,14 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   useEffect(() => {
     if (isLoading || !degreeTemplate || isInitialLoad) {
+      if (import.meta.env.DEV) {
+        console.log("[DegreePlanView] Autosave effect: Skipped due to guard conditions. isLoading:", isLoading, "degreeTemplate:", !!degreeTemplate, "isInitialLoad:", isInitialLoad);
+      }
       return;
+    }
+
+    if (import.meta.env.DEV) {
+      console.log("[DegreePlanView] Autosave effect: Triggered! Current semesters:", Object.keys(degreeTemplate.semesters || {}));
     }
 
     if (autosaveTimeoutRef.current) {
@@ -1061,6 +1099,11 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     setSaveStatus('saving');
 
     autosaveTimeoutRef.current = window.setTimeout(() => {
+      if (import.meta.env.DEV) {
+        console.log("[DegreePlanView] Autosave timeout executed! CurrentUser:", !!currentUser, "UID:", currentUser?.uid);
+        console.log("[DegreePlanView] Template semesters at save time:", Object.keys(degreeTemplate.semesters || {}));
+      }
+      
       if (currentUser && currentUser.uid) {
         if (import.meta.env.DEV) {
           console.log("[DegreePlanView] Autosaving plan to Firestore for user:", currentUser.uid);
@@ -1073,6 +1116,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
           classificationCredits,
           binaryStates
         ).then(() => {
+          if (import.meta.env.DEV) {
+            console.log("[DegreePlanView] Firestore save completed successfully");
+          }
           setSaveStatus('saved');
         }).catch(error => {
           if (import.meta.env.DEV) {
@@ -1431,7 +1477,8 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       allTemplatesData,
       handleEditRule,
       handleDeleteRule,
-      handleToggleCourseListEditorModal
+      handleToggleCourseListEditorModal,
+      handleRemoveSemesterCallback
     );
     const newEdges = transformDataToEdges(degreeTemplate, allCoursesData);
     if (import.meta.env.DEV) {
@@ -1446,7 +1493,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChange, 
     handleRemoveCourseCallback, handleBinaryChange, handleClassificationToggle, 
     handleClassificationCreditsChange, handleEditRule, handleDeleteRule, handleToggleCourseListEditorModal,
-    setNodes, setEdges, isLoading, allTemplatesData
+    handleRemoveSemesterCallback, setNodes, setEdges, isLoading, allTemplatesData
   ]);
 
   const handleSelectionChange = useCallback(({ nodes: selNodes }: OnSelectionChangeParams) => {
@@ -1469,15 +1516,13 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      {/* Top-left: Logo and Theme Toggle */}
-      <div className="fixed top-4 left-4 z-50 items-center gap-2 flex flex-row-reverse bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
+      {/* Top-left: Logo */}
+      <div className="fixed top-4 left-4 z-50 items-center gap-2 flex flex-row-reverse bg-slate-50/60 dark:bg-gray-800/60 rounded-lg shadow-md backdrop-blur-sm p-2">
         <Logo />
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-1" />
-        <ThemeToggleButton />
       </div>
       
       {/* Top-right: Save Status and Profile */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2">
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-3 bg-slate-50/60 dark:bg-gray-800/60 rounded-lg shadow-md backdrop-blur-sm p-2">
         <AuthButtons onExportPlan={handleExportPlan} onImportPlan={handleImportPlan} />
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
         <div className="flex items-center justify-center min-w-[50px] text-center p-2">

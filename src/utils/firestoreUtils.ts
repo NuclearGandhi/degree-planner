@@ -63,11 +63,14 @@ export const savePlanToFirestore = async (
 
   try {
     if (process.env.NODE_ENV === 'development') {
-      console.debug('[savePlanToFirestore] Saving plan for user:', userId, planData);
+      console.debug('[savePlanToFirestore] Saving plan for user:', userId);
+      console.debug('[savePlanToFirestore] Template semesters:', Object.keys(planData.degreeTemplate?.semesters || {}));
+      console.debug('[savePlanToFirestore] Full planData:', planData);
     }
-    await setDoc(planDocRef, planData, { merge: true }); // Use merge: true to update existing or create new
+    await setDoc(planDocRef, planData); // Replace the entire document to ensure removals are persisted
     if (process.env.NODE_ENV === 'development') {
       console.debug('[savePlanToFirestore] Plan saved successfully for user:', userId);
+      console.debug('[savePlanToFirestore] Saved template semesters:', Object.keys(planData.degreeTemplate?.semesters || {}));
     }
   } catch (error) {
     if (isBlockedByClient(error)) {
