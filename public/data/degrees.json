@@ -17,9 +17,6 @@
   ],
   "mechanical-engineering-general": {
     "name": "הנדסת מכונות - כללי",
-    "credits-from-malag": 6,
-    "credits-from-sports": 2,
-    "credits-from-final-project": 6,
     "semesters": {
       "סמסטר א'": ["01040041", "01040065", "01250001", "02340128", "03240033"],
       "סמסטר ב'": [
@@ -59,7 +56,8 @@
           { "listName": "רשימה א'", "min": 1 },
           { "listName": "רשימה ב'", "min": 2 },
           { "listName": "רשימה ג'", "min": 2 },
-          { "listName": "רשימה ד'", "min": 1 }
+          { "listName": "רשימה ד'", "min": 1 },
+          { "listName": "פרויקט גמר", "minCredits": 6 }
         ]
       },
       {
@@ -73,6 +71,21 @@
         "description": "נקודות בחירה",
         "type": "minCreditsFromAnySelectiveList",
         "min": 30
+      },
+      {
+        "id": "humanitarian_courses_rule",
+        "description": "קורסי מל\"ג",
+        "type": "minCreditsFromIdPattern",
+        "id_pattern": "0324",
+        "exclude_courses": ["03240032", "03240033"],
+        "min": 6
+      },
+      {
+        "id": "sport_courses_rule",
+        "description": "קורסי ספורט",
+        "type": "minCreditsFromIdPattern",
+        "id_pattern": "039",
+        "min": 2
       }
     ],
     "courses-lists": {
@@ -122,6 +135,14 @@
         "00460241",
         "01140036",
         "01160041"
+      ],
+      "פרויקט גמר": [
+        "00340379",
+        "00340355",
+        "00340353",
+        "00340380",
+        "00340381",
+        "00340354"
       ],
       "רשימה ה'": [
         "00350141",

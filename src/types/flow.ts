@@ -76,6 +76,7 @@ export interface RuleNodeData {
     currentValueDone?: number;
     requiredValue?: number;
     isSatisfied?: boolean;
+    unit?: string; // Unit of measurement (e.g., 'נק"ז', 'קורסים')
   }[];
   currentValuePlanned?: number;
   currentValueDone?: number;

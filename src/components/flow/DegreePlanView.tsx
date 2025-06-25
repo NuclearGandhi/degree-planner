@@ -203,7 +203,7 @@ const transformDataToNodes = (
   if (template.rules && Array.isArray(template.rules)) {
     const consolidatedRuleTypes = new Set([
       'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
-      'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList'
+      'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
     ]);
     let tempConsolidatedExists = false;
     template.rules.forEach(rule => {
@@ -285,7 +285,7 @@ const transformDataToNodes = (
   const otherRules = template.rules!.filter(rule => {
     const consolidatedRuleTypes = new Set([
       'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
-      'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList'
+      'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
     ]);
     return rule.type !== 'classification_courses' && !consolidatedRuleTypes.has(rule.type) && rule.id && rule.description;
   });
@@ -355,7 +355,7 @@ const transformDataToNodes = (
     const rulesToConsolidate = template.rules!.filter(rule => {
       const consolidatedRuleTypes = new Set([
         'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
-        'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList'
+        'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
       ]);
       return rule.type !== 'classification_courses' && consolidatedRuleTypes.has(rule.type);
     });
@@ -926,7 +926,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     if (ruleId === CONSOLIDATED_RULES_NODE_ID) {
       const consolidatedRuleTypes = new Set([
         'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
-        'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList'
+        'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
       ]);
       const rulesToEdit = degreeTemplate.rules.filter(rule => consolidatedRuleTypes.has(rule.type));
       if (rulesToEdit.length > 0) {

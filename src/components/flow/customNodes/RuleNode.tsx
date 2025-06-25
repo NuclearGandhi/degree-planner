@@ -321,7 +321,7 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
                         {detail.listName}
                       </p>
                       <p className={`text-xs ${detail.isSatisfied ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                        {detail.currentValueDone}/{detail.requiredValue} קורסים (מתוכנן: {detail.currentValuePlanned})
+                        {detail.currentValueDone}/{detail.requiredValue} {detail.unit || 'קורסים'} (מתוכנן: {detail.currentValuePlanned})
                       </p>
                     </div>
                     {/* Right part: Progress Bar for detail */}

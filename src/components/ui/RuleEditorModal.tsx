@@ -8,7 +8,8 @@ import CustomNumberInput from './CustomNumberInput';
 interface EditableListItem {
   id: string; // Temporary ID for React key
   listName: string;
-  min: number;
+  min?: number;
+  minCredits?: number;
 }
 
 interface RuleEditorModalProps {
@@ -118,7 +119,13 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
       updatedRule.min = parseNumericState(listRuleNumericValue);
     } else if (rule.type === 'minCoursesFromMultipleLists') {
       // Convert EditableListItem back to the format expected by DegreeRule, removing temporary id
-      updatedRule.lists = multiListItems.map(({ /* id, */ ...rest }) => rest);
+      updatedRule.lists = multiListItems.map((item) => {
+        // Remove undefined values and temporary id to keep the rule clean
+        const cleanItem: { listName: string; min?: number; minCredits?: number } = { listName: item.listName };
+        if (item.min !== undefined) cleanItem.min = item.min;
+        if (item.minCredits !== undefined) cleanItem.minCredits = item.minCredits;
+        return cleanItem;
+      });
     }
     // TODO: Add saving logic for other rule types
 
@@ -141,13 +148,17 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
       id: `new-item-${Date.now()}`,
       // Default to the first truly available list for this new item, or empty if none are left
       listName: trulyAvailableListNamesForNewItem.length > 0 ? trulyAvailableListNamesForNewItem[0] : '', 
-      min: 1 // Default min value
+      min: 1, // Default min value
+      minCredits: undefined
     }]);
   };
 
-  const handleMultiListItemChange = (id: string, field: 'listName' | 'min', value: string | number) => {
+  const handleMultiListItemChange = (id: string, field: 'listName' | 'min' | 'minCredits', value: string | number) => {
     setMultiListItems(prev => prev.map(item => 
-      item.id === id ? { ...item, [field]: field === 'min' ? (value === '' ? 0 : parseFloat(String(value)) || 0) : String(value) } : item
+      item.id === id ? { 
+        ...item, 
+        [field]: field === 'listName' ? String(value) : (value === '' ? undefined : parseFloat(String(value)) || undefined)
+      } : item
     ));
   };
 
@@ -279,18 +290,93 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label htmlFor={`multiListMin-${item.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      מספר קורסים מינימלי מהרשימה
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      סוג הדרישה
                     </label>
-                    <CustomNumberInput
-                      id={`multiListMin-${item.id}`}
-                      value={item.min}
-                      onChange={(val) => handleMultiListItemChange(item.id, 'min', val)}
-                      className="w-full"
-                      inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
-                      min={0}
-                      step={1}
-                    />
+                    <div className="flex gap-4 mb-2">
+                      <label className="flex items-center cursor-pointer">
+                        <div className="relative ml-2">
+                          <input
+                            type="radio"
+                            name={`requirementType-${item.id}`}
+                            checked={item.min !== undefined && item.minCredits === undefined}
+                            onChange={() => {
+                              handleMultiListItemChange(item.id, 'min', item.min ?? 1);
+                              handleMultiListItemChange(item.id, 'minCredits', '');
+                            }}
+                            className="sr-only"
+                          />
+                          <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
+                            item.min !== undefined && item.minCredits === undefined
+                              ? 'border-indigo-600 bg-indigo-600' 
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+                          }`}>
+                            {item.min !== undefined && item.minCredits === undefined && (
+                              <div className="w-2 h-2 rounded-full bg-white"></div>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">מספר קורסים</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <div className="relative ml-2">
+                          <input
+                            type="radio"
+                            name={`requirementType-${item.id}`}
+                            checked={item.minCredits !== undefined && item.min === undefined}
+                            onChange={() => {
+                              handleMultiListItemChange(item.id, 'minCredits', item.minCredits ?? 6);
+                              handleMultiListItemChange(item.id, 'min', '');
+                            }}
+                            className="sr-only"
+                          />
+                          <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
+                            item.minCredits !== undefined && item.min === undefined
+                              ? 'border-indigo-600 bg-indigo-600' 
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+                          }`}>
+                            {item.minCredits !== undefined && item.min === undefined && (
+                              <div className="w-2 h-2 rounded-full bg-white"></div>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">נקודות זכות</span>
+                      </label>
+                    </div>
+                    
+                    {item.min !== undefined && item.minCredits === undefined && (
+                      <div>
+                        <label htmlFor={`multiListMin-${item.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          מספר קורסים מינימלי מהרשימה
+                        </label>
+                        <CustomNumberInput
+                          id={`multiListMin-${item.id}`}
+                          value={item.min ?? 1}
+                          onChange={(val) => handleMultiListItemChange(item.id, 'min', val)}
+                          className="w-full"
+                          inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+                          min={0}
+                          step={1}
+                        />
+                      </div>
+                    )}
+                    
+                    {item.minCredits !== undefined && item.min === undefined && (
+                      <div>
+                        <label htmlFor={`multiListMinCredits-${item.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          נקודות זכות מינימליות מהרשימה
+                        </label>
+                        <CustomNumberInput
+                          id={`multiListMinCredits-${item.id}`}
+                          value={item.minCredits ?? 6}
+                          onChange={(val) => handleMultiListItemChange(item.id, 'minCredits', val)}
+                          className="w-full"
+                          inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+                          min={0}
+                          step={0.5}
+                        />
+                      </div>
+                    )}
                   </div>
                   <button 
                     type="button" 

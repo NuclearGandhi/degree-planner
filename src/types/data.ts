@@ -43,11 +43,11 @@ export interface CourseListRule {
 export interface DegreeRule {
   id: string;
   description: string;
-  type: 'total_credits' | 'credits_from_list' | 'min_grade' | 'minCredits' | 'minCoursesFromList' | 'minCoursesFromMultipleLists' | 'minCreditsFromMandatory' | 'minCreditsFromAnySelectiveList' | 'classification_courses' | string;
+  type: 'total_credits' | 'credits_from_list' | 'min_grade' | 'minCredits' | 'minCoursesFromList' | 'minCoursesFromMultipleLists' | 'minCreditsFromMandatory' | 'minCreditsFromAnySelectiveList' | 'classification_courses' | 'minCreditsFromIdPattern' | string;
   required_credits?: number;
   course_list_name?: string;
   listName?: string;
-  lists?: { listName: string; min: number }[];
+  lists?: { listName: string; min?: number; minCredits?: number }[];
   min_grade_value?: number;
   courses_for_min_grade?: string[];
   min?: number;
@@ -56,6 +56,9 @@ export interface DegreeRule {
     name: string; 
     creditInput?: { max: number; step: number; }; // Added for exemption credit input
   }>; // For the new classification_courses rule type
+  // New fields for pattern-based rules
+  id_pattern?: string; // Course ID pattern (e.g., "0324", "039")
+  exclude_courses?: string[]; // Course IDs to exclude from pattern match
 }
 
 // Represents a degree template from degrees.json
