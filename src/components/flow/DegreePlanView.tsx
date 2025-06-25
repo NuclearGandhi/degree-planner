@@ -786,10 +786,20 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     setSelectedNodes(prevSelected => prevSelected.filter(node => node.id !== courseIdToRemove));
   }, [setDegreeTemplate, setGrades, setSelectedNodes]);
 
-  const handleNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
+  const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
     if (import.meta.env.DEV) {
       console.log('[DegreePlanView] handleNodeDoubleClick called with node:', node);
     }
+    
+    // Check if the double-click target is an input element or its descendant
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.closest('input')) {
+      if (import.meta.env.DEV) {
+        console.log('[DegreePlanView] handleNodeDoubleClick: Ignoring double-click on input element');
+      }
+      return; // Don't open modal when double-clicking on input elements
+    }
+    
     if (node.type === 'course' && node.data) {
       const courseData = node.data as CourseNodeData;
       const courseId = courseData.courseId;
@@ -1500,18 +1510,28 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     setSelectedNodes(selNodes);
   }, [setSelectedNodes]);
 
-  const availableCoursesForModal = useMemo(() => {
+  const { availableCoursesForModal, alreadyTakenCoursesForModal } = useMemo(() => {
     if (!degreeTemplate || typeof degreeTemplate.semesters !== 'object' || degreeTemplate.semesters === null || !Array.isArray(allCoursesData)) {
       if (degreeTemplate && (typeof degreeTemplate.semesters !== 'object' || degreeTemplate.semesters === null)) {
         console.warn('Data Structure Warning (availableCoursesForModal): currentTemplate.semesters is not an object!', degreeTemplate.semesters);
       }
-      return Array.isArray(allCoursesData) ? allCoursesData.filter(course => !course.isClassificationCourse) : [];
+      return {
+        availableCoursesForModal: Array.isArray(allCoursesData) ? allCoursesData.filter(course => !course.isClassificationCourse) : [],
+        alreadyTakenCoursesForModal: []
+      };
     }
     const coursesInPlan = new Set<string>();
     Object.values(degreeTemplate.semesters).forEach(semesterCourseList => {
       semesterCourseList.forEach(id => coursesInPlan.add(id));
     });
-    return allCoursesData.filter(course => !coursesInPlan.has(course._id) && !course.isClassificationCourse);
+    
+    const available = allCoursesData.filter(course => !coursesInPlan.has(course._id) && !course.isClassificationCourse);
+    const alreadyTaken = allCoursesData.filter(course => coursesInPlan.has(course._id) && !course.isClassificationCourse);
+    
+    return {
+      availableCoursesForModal: available,
+      alreadyTakenCoursesForModal: alreadyTaken
+    };
   }, [allCoursesData, degreeTemplate]);
 
   return (
@@ -1558,6 +1578,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         courses={availableCoursesForModal}
         onSelectCourse={handleSelectCourseFromModal}
         semesterNumber={semesterToAddCourseTo}
+        alreadyTakenCourses={alreadyTakenCoursesForModal}
       />
       {courseDetailModalData && courseDetailModalData.course && (
         <CourseDetailModal

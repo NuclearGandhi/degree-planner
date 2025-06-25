@@ -9,6 +9,7 @@ interface CourseSelectionModalProps {
   onSelectCourse: (course: RawCourseData) => void;
   semesterNumber?: number | null; // Made optional
   customTitle?: string; // New optional prop for custom title
+  alreadyTakenCourses?: RawCourseData[]; // New prop for already taken courses
 }
 
 export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
@@ -18,18 +19,26 @@ export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
   onSelectCourse,
   semesterNumber,
   customTitle, // New prop
+  alreadyTakenCourses = [], // Default to empty array
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Combine available and already taken courses for display
+  const allCoursesForDisplay = useMemo(() => {
+    const availableWithStatus = courses.map(course => ({ ...course, isAlreadyTaken: false }));
+    const takenWithStatus = alreadyTakenCourses.map(course => ({ ...course, isAlreadyTaken: true }));
+    return [...availableWithStatus, ...takenWithStatus];
+  }, [courses, alreadyTakenCourses]);
+
   const filteredCourses = useMemo(() => {
     if (!searchTerm) {
-      return courses;
+      return allCoursesForDisplay;
     }
-    return courses.filter(course => 
+    return allCoursesForDisplay.filter(course => 
       course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       course._id.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [courses, searchTerm]);
+  }, [allCoursesForDisplay, searchTerm]);
 
   const modalTitle = customTitle 
     ? customTitle 
@@ -59,11 +68,33 @@ export const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
             {filteredCourses.map((course) => (
               <li key={course._id}>
                 <button
-                  onClick={() => onSelectCourse(course)}
-                  className="w-full text-right p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-colors rtl-text-force"
+                  onClick={() => course.isAlreadyTaken ? undefined : onSelectCourse(course)}
+                  disabled={course.isAlreadyTaken}
+                  className={`w-full text-right p-3 rounded-md transition-colors rtl-text-force ${
+                    course.isAlreadyTaken 
+                      ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-75 border border-gray-300 dark:border-gray-600'
+                      : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                  }`}
                 >
-                  <div className="font-medium text-gray-800 dark:text-gray-200">{course.name} ({course._id})</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">נקודות זכות: {course.credits}</div>
+                  <div className={`font-medium ${
+                    course.isAlreadyTaken 
+                      ? 'text-gray-600 dark:text-gray-400' 
+                      : 'text-gray-800 dark:text-gray-200'
+                  }`}>
+                    {course.name} ({course._id})
+                  </div>
+                  <div className={`text-sm ${
+                    course.isAlreadyTaken 
+                      ? 'text-gray-500 dark:text-gray-500' 
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}>
+                    נקודות זכות: {course.credits}
+                  </div>
+                  {course.isAlreadyTaken && (
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-medium">
+                      ✓ הקורס כבר נמצא בתכנית הלימודים
+                    </div>
+                  )}
                 </button>
               </li>
             ))}
