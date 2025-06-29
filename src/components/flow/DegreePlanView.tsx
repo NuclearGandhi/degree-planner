@@ -951,12 +951,25 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [degreeTemplate]);
 
   const handleSaveConsolidatedRules = useCallback((updatedRules: DegreeRule[]) => {
-    if (!degreeTemplate || !degreeTemplate.rules) return;
+    if (!degreeTemplate) return;
 
+    // Initialize rules array if it doesn't exist
+    const currentRules = degreeTemplate.rules || [];
+    
     const ruleMap = new Map(updatedRules.map(rule => [rule.id, rule]));
-    const newRulesArray = degreeTemplate.rules.map(originalRule => 
+    const existingRuleIds = new Set(currentRules.map(rule => rule.id));
+    
+    // Update existing rules and keep non-consolidated rules unchanged
+    const newRulesArray = currentRules.map(originalRule => 
       ruleMap.has(originalRule.id) ? ruleMap.get(originalRule.id)! : originalRule
     );
+    
+    // Add completely new rules that weren't in the original rules array
+    updatedRules.forEach(rule => {
+      if (!existingRuleIds.has(rule.id)) {
+        newRulesArray.push(rule);
+      }
+    });
 
     const newDegreeTemplate = { ...degreeTemplate, rules: newRulesArray };
     setDegreeTemplate(newDegreeTemplate);
