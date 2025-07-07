@@ -119,7 +119,7 @@ export function evaluateRule(
           }
         });
         coursesToConsider = coursesInPlan.filter(cp => selectiveIds.has(cp._id));
-        descriptionSuffix = ` (בחירה)`;
+        descriptionSuffix = ` `;
       } else if (rule.type === 'minCreditsFromIdPattern' && rule.id_pattern) {
         const pattern = rule.id_pattern;
         const excludeIds = new Set(rule.exclude_courses || []);
@@ -128,7 +128,21 @@ export function evaluateRule(
           const notExcluded = !excludeIds.has(cp._id);
           return startsWithPattern && notExcluded;
         });
-        descriptionSuffix = ` (${pattern})`;
+        descriptionSuffix = ` `;
+        
+        if (import.meta.env.DEV) {
+          console.debug(`[evaluateRule DEBUG] For pattern rule "${rule.description || rule.id}":`);
+          console.debug(`[evaluateRule DEBUG]   Pattern: "${pattern}"`);
+          console.debug(`[evaluateRule DEBUG]   Exclude IDs:`, Array.from(excludeIds));
+          console.debug(`[evaluateRule DEBUG]   All courses in plan:`, coursesInPlan.map(c => c._id));
+          console.debug(`[evaluateRule DEBUG]   Courses matching pattern:`, coursesToConsider.map(c => ({ id: c._id, name: c.name, credits: c.credits })));
+          console.debug(`[evaluateRule DEBUG]   Pattern match details:`, coursesInPlan.map(c => ({
+            id: c._id,
+            startsWithPattern: c._id.startsWith(pattern),
+            isExcluded: excludeIds.has(c._id),
+            matchesRule: c._id.startsWith(pattern) && !excludeIds.has(c._id)
+          })).filter(c => c.id.includes('039')));
+        }
       } else {
         currentProgressString = `כלל '${rule.type}' לא הוגדר כראוי (בעיה ברשימת הקורסים).`;
         break;

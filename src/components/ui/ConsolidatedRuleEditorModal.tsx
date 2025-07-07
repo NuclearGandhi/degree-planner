@@ -156,10 +156,10 @@ const ConsolidatedRuleEditorModal: React.FC<ConsolidatedRuleEditorModalProps> = 
           updatedRule.min = finalNumericValue;
           // Set pattern and exclusions based on description
           if (editableRule.description.includes('מל"ג') || editableRule.description.includes('הומניטריים')) {
-            updatedRule.id_pattern = '^0324';
+            updatedRule.id_pattern = '0324';
             updatedRule.exclude_courses = ['032411', '032412'];
           } else if (editableRule.description.includes('ספורט')) {
-            updatedRule.id_pattern = '^039';
+            updatedRule.id_pattern = '039';
           }
         }
       }

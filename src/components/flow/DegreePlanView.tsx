@@ -1213,6 +1213,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             }
             loadedFrom = 'firestore';
             templateForProcessing = fixSemesterOrdering(firestorePlan.degreeTemplate);
+            
             // Ensure ID exists, especially for older Firestore plans
             if (!templateForProcessing.id && fetchedDegreeFileData) {
               for (const key in fetchedDegreeFileData) {
@@ -1226,6 +1227,16 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
                     break;
                   }
                 }
+              }
+            }
+            
+            // IMPORTANT: Always use fresh rules from template file, not from Firestore
+            // This ensures rules are up-to-date even if old patterns were saved
+            if (templateForProcessing.id && fetchedDegreeFileData && fetchedDegreeFileData[templateForProcessing.id]) {
+              const freshTemplate = fetchedDegreeFileData[templateForProcessing.id] as DegreeTemplate;
+              templateForProcessing.rules = freshTemplate.rules; // Use fresh rules
+              if (import.meta.env.DEV) {
+                console.log(`[DegreePlanView] Initial Load: Merged fresh rules from template file for '${templateForProcessing.id}'`);
               }
             }
             gradesForProcessing = firestorePlan.grades || {};
@@ -1290,6 +1301,16 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             }
             if (import.meta.env.DEV) {
                 console.debug('[DegreePlanView Initial Load] Local plan loaded, template.id AFTER potential fix:', templateForProcessing?.id);
+            }
+
+            // IMPORTANT: Always use fresh rules from template file, not from local storage
+            // This ensures rules are up-to-date even if old patterns were saved
+            if (templateForProcessing.id && fetchedDegreeFileData && fetchedDegreeFileData[templateForProcessing.id]) {
+              const freshTemplate = fetchedDegreeFileData[templateForProcessing.id] as DegreeTemplate;
+              templateForProcessing.rules = freshTemplate.rules; // Use fresh rules
+              if (import.meta.env.DEV) {
+                console.log(`[DegreePlanView] Initial Load: Merged fresh rules from template file for '${templateForProcessing.id}' (from local storage)`);
+              }
             }
 
             gradesForProcessing = savedPlanData.grades || {};
