@@ -1,19 +1,25 @@
 import React, { useState, useRef } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { ArrowUpTrayIcon, ArrowDownTrayIcon, ArrowsRightLeftIcon, ArrowLeftStartOnRectangleIcon, ArrowRightStartOnRectangleIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon } from '@heroicons/react/24/solid';
+import { ConfirmModal } from './ConfirmModal';
+import { User } from '@/types/user';
 
 interface AuthButtonsProps {
-  onExportPlan?: () => void;
-  onImportPlan?: (file: File) => void;
+  onExportPlan: () => void;
+  onImportPlan: (file: File) => void;
+  onSwitchTemplate: () => void;
+  currentUser: User | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
 }
 
-const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan }) => {
-  const { currentUser, signInWithGoogle, signOut } = useAuth();
+const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan, onSwitchTemplate, currentUser, onSignIn, onSignOut }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      onSignOut();
       setIsDropdownOpen(false);
     } catch (error) {
       console.error('Error signing out:', error);
@@ -25,9 +31,7 @@ const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan })
   };
 
   const handleExportPlan = () => {
-    if (onExportPlan) {
-      onExportPlan();
-    }
+    onExportPlan();
     setIsDropdownOpen(false);
   };
 
@@ -39,98 +43,91 @@ const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan })
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && onImportPlan) {
-      onImportPlan(file);
-      setIsDropdownOpen(false);
-      // Reset the input so the same file can be selected again
-      event.target.value = '';
-    }
+    if (!file) return;
+    onImportPlan(file);
+    setIsDropdownOpen(false);
+    event.target.value = '';
   };
 
-  if (currentUser) {
-    return (
-      <div className="relative">
-        <button
-          onClick={toggleDropdown}
-          className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-        >
-          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
-        </button>
-        
-        {isDropdownOpen && (
-          <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-              <p className="font-medium text-gray-900 dark:text-white">
-                {currentUser.displayName || 'משתמש'}
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {currentUser.email}
-              </p>
-            </div>
-            <div className="p-2">
-              {onExportPlan && (
-                <button
-                  onClick={handleExportPlan}
-                  className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  ייצא תוכנית לימודים
-                </button>
-              )}
-              {onImportPlan && (
-                <>
-                  <button
-                    onClick={handleImportClick}
-                    className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                    </svg>
-                    ייבא תוכנית לימודים
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </>
-              )}
-              <button
-                onClick={handleSignOut}
-                className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-              >
-                התנתק
-              </button>
-            </div>
-          </div>
-        )}
-        
-        {/* Click outside to close */}
-        {isDropdownOpen && (
-          <div 
-            className="fixed inset-0 z-40" 
-            onClick={() => setIsDropdownOpen(false)}
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
-    <button
-      onClick={signInWithGoogle}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm font-medium"
-    >
-      התחבר עם Google
-    </button>
+    <div className="relative">
+      <button
+        onClick={toggleDropdown}
+        className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+      >
+        <UserCircleIcon className="h-10 w-10 text-blue-500" />
+      </button>
+      
+      {isDropdownOpen && (
+        <div className="absolute right-0 mt-3 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+          {!currentUser && (
+            <button
+              onClick={() => { onSignIn(); setIsDropdownOpen(false); }}
+              className="block w-full text-right px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+            >
+              <ArrowRightStartOnRectangleIcon className="h-4 w-4 mr-2 inline" />
+              התחבר עם Google
+            </button>
+          )}
+          {currentUser && (
+            <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-600">
+              <p className="text-sm text-gray-500 dark:text-gray-400">מחובר כ: {currentUser.displayName || currentUser.email}</p>
+            </div>
+          )}
+          {onExportPlan && (
+            <button
+              onClick={handleExportPlan}
+              className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
+            >
+              <ArrowUpTrayIcon className="h-4 w-4 mr-2 inline" />
+              ייצא תכנית לימודים
+            </button>
+          )}
+          {onImportPlan && (
+            <>
+              <button
+                onClick={handleImportClick}
+                className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
+              >
+                <ArrowDownTrayIcon className="h-4 w-4 mr-2 inline" />
+                ייבא תוכנית לימודים
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </>
+          )}
+          <button
+            onClick={onSwitchTemplate}
+            className="block w-full text-right px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <ArrowsRightLeftIcon className="h-4 w-4 mr-2 inline" />
+            החלף תכנית
+          </button>
+          {currentUser && (
+            <button
+              onClick={handleSignOut}
+              className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
+            >
+              <ArrowLeftStartOnRectangleIcon className="h-4 w-4 mr-2 inline" />
+              התנתק
+            </button>
+          )}
+        </div>
+      )}
+      
+      {/* Click outside to close */}
+      {isDropdownOpen && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setIsDropdownOpen(false)}
+        />
+      )}
+    </div>
   );
 };
 

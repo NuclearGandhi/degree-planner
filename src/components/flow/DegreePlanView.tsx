@@ -42,6 +42,8 @@ import ConsolidatedRuleEditorModal from '../../components/ui/ConsolidatedRuleEdi
 import { useAuth } from '../../hooks/useAuth';
 import { savePlanToFirestore, loadPlanFromFirestore } from '../../utils/firestoreUtils';
 import AuthButtons from '../ui/AuthButtons';
+import { TemplateSelectionModal } from '../../components/ui/TemplateSelectionModal';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 const nodeTypes = {
   course: CourseNode,
@@ -600,7 +602,7 @@ const transformDataToEdges = (
 
 function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   const { theme } = useTheme();
-  const { currentUser, loading: authLoading } = useAuth();
+  const { currentUser, loading: authLoading, signInWithGoogle, signOut } = useAuth();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [grades, setGrades] = useState<Record<string, string>>({});
@@ -626,6 +628,14 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   const [classificationChecked, setClassificationChecked] = useState<Record<string, boolean>>(initialClassificationCheckedState);
   const [classificationCredits, setClassificationCredits] = useState<Record<string, number>>({});
+
+  const [showTemplateSelection, setShowTemplateSelection] = useState(false);
+  const [isSwitchingTemplate, setIsSwitchingTemplate] = useState(false);
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
+  const [showSignInConfirm, setShowSignInConfirm] = useState(false);
+
+  const [showDeleteSemesterConfirm, setShowDeleteSemesterConfirm] = useState(false);
+  const [semesterToDelete, setSemesterToDelete] = useState<string | null>(null);
 
   const handleClassificationToggle = useCallback((courseId: string) => {
     setClassificationChecked(prev => {
@@ -683,26 +693,8 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, []);
 
   const handleRemoveSemesterCallback = useCallback((semesterKey: string) => {
-    if (import.meta.env.DEV) {
-      console.log(`DegreePlanView: Remove semester: ${semesterKey}`);
-    }
-    if (window.confirm(`האם אתה בטוח שברצונך למחוק את ${semesterKey}?`)) {
-      setDegreeTemplate(prevTemplate => {
-        if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate;
-
-        const updatedSemesters = { ...prevTemplate.semesters };
-        delete updatedSemesters[semesterKey];
-
-        const newTemplate = { ...prevTemplate, semesters: updatedSemesters };
-        
-        if (import.meta.env.DEV) {
-          console.log(`DegreePlanView: Semester ${semesterKey} removed. Updated template:`, newTemplate);
-          console.log(`DegreePlanView: Remaining semesters:`, Object.keys(updatedSemesters));
-        }
-
-        return newTemplate;
-      });
-    }
+    setSemesterToDelete(semesterKey);
+    setShowDeleteSemesterConfirm(true);
   }, []);
 
   const handleSelectCourseFromModal = useCallback((selectedCourse: RawCourseData) => {
@@ -1568,6 +1560,36 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     };
   }, [allCoursesData, degreeTemplate]);
 
+  const applyLoadedData = (
+    template: DegreeTemplate | undefined,
+    grades: Record<string, string>,
+    checked: Record<string, boolean>,
+    credits: Record<string, number>,
+    binaries: Record<string, boolean>,
+    globals: DegreeRule[]
+  ) => {
+    setDegreeTemplate(template);
+    setGrades(grades);
+    setClassificationChecked(checked);
+    setClassificationCredits(credits);
+    setBinaryStates(binaries);
+    setCurrentGlobalRules(globals);
+  };
+
+  const handleSelectTemplate = useCallback((selectedTemplate: DegreeTemplate) => {
+    applyLoadedData(
+      selectedTemplate,
+      {}, // reset grades
+      {}, // reset classificationChecked
+      {}, // reset classificationCredits
+      {}, // reset binaryStates
+      currentGlobalRules // keep global rules
+    );
+    setShowTemplateSelection(false);
+    // Trigger save
+    setSaveStatus('saving');
+  }, [currentGlobalRules]);
+
   return (
     <div style={{ width: '100%', height: '100%' }}>
       {/* Top-left: Logo */}
@@ -1577,7 +1599,14 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       
       {/* Top-right: Save Status and Profile */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-3 bg-slate-50/60 dark:bg-gray-800/60 rounded-lg shadow-md backdrop-blur-sm p-2">
-        <AuthButtons onExportPlan={handleExportPlan} onImportPlan={handleImportPlan} />
+        <AuthButtons
+          currentUser={currentUser}
+          onSignIn={() => setShowSignInConfirm(true)}
+          onSignOut={async () => { await signOut(); }}
+          onExportPlan={handleExportPlan}
+          onImportPlan={handleImportPlan}
+          onSwitchTemplate={() => setShowSwitchConfirm(true)}
+        />
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
         <div className="flex items-center justify-center min-w-[50px] text-center p-2">
           {saveStatus === 'saving' && <span className="text-xs text-slate-600 dark:text-slate-300 p-1 bg-slate-200 dark:bg-slate-700 rounded">שומר...</span>}
@@ -1666,6 +1695,61 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         currentTemplate={degreeTemplate}
         allCourses={allCoursesData}
         grades={grades}
+      />
+      <TemplateSelectionModal
+        isOpen={showTemplateSelection}
+        onClose={() => setShowTemplateSelection(false)}
+        templates={Object.values(allTemplatesData || {})}
+        onSelectTemplate={handleSelectTemplate}
+        isSwitching={isSwitchingTemplate}
+        customTitle={isSwitchingTemplate ? 'החלף תכנית לימודים' : 'בחר תכנית לימודים ראשונית'}
+        onExport={handleExportPlan}
+      />
+      <ConfirmModal
+        isOpen={showSwitchConfirm}
+        onClose={() => setShowSwitchConfirm(false)}
+        message="החלפת תכנית תמחק את התכנית הנוכחית. האם לייצא קודם?"
+        onConfirm={() => {
+          setIsSwitchingTemplate(true);
+          setShowTemplateSelection(true);
+        }}
+        confirmText="החלף בכל זאת"
+        onExport={handleExportPlan}
+      />
+      <ConfirmModal
+        isOpen={showSignInConfirm}
+        onClose={() => setShowSignInConfirm(false)}
+        message="התחברות תטען את התכנית מהענן, מה שעשוי למחוק שינויים מקומיים. האם לייצא קודם?"
+        onConfirm={async () => { await signInWithGoogle(); }}
+        onExport={handleExportPlan}
+        confirmText="התחבר בכל זאת"
+      />
+      <ConfirmModal
+        isOpen={showDeleteSemesterConfirm}
+        onClose={() => {
+          setShowDeleteSemesterConfirm(false);
+          setSemesterToDelete(null);
+        }}
+        message={`האם אתה בטוח שברצונך למחוק את ${semesterToDelete}?`}
+        onConfirm={() => {
+          if (semesterToDelete) {
+            setDegreeTemplate(prevTemplate => {
+              if (!prevTemplate || typeof prevTemplate.semesters !== 'object') return prevTemplate;
+              const updatedSemesters = { ...prevTemplate.semesters };
+              delete updatedSemesters[semesterToDelete];
+              const newTemplate = { ...prevTemplate, semesters: updatedSemesters };
+              if (import.meta.env.DEV) {
+                console.log(`DegreePlanView: Semester ${semesterToDelete} removed. Updated template:`, newTemplate);
+                console.log(`DegreePlanView: Remaining semesters:`, Object.keys(updatedSemesters));
+              }
+              return newTemplate;
+            });
+          }
+          setShowDeleteSemesterConfirm(false);
+          setSemesterToDelete(null);
+        }}
+        confirmText="מחק"
+        cancelText="ביטול"
       />
     </div>
   );
