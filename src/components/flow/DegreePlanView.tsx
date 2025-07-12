@@ -1373,6 +1373,10 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         }
         setIsLoading(false);
         setIsInitialLoad(false);
+        if (!localStorage.getItem('hasSelectedTemplate')) {
+          setShowTemplateSelection(true);
+          setIsSwitchingTemplate(false);
+        }
       }
     };
   
@@ -1588,6 +1592,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     setShowTemplateSelection(false);
     // Trigger save
     setSaveStatus('saving');
+    localStorage.setItem('hasSelectedTemplate', 'true');
   }, [currentGlobalRules]);
 
   return (
