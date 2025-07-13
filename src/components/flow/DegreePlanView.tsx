@@ -1353,17 +1353,26 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
             }
           }
 
-          setDegreeTemplate(templateForProcessing);
-          setCurrentGlobalRules(globalRulesForProcessing);
-          setGrades(gradesForProcessing);
-          setClassificationChecked(classificationCheckedForProcessing);
-          setClassificationCredits(classificationCreditsForProcessing);
-          setBinaryStates(binaryStatesForProcessing);
-        } else {
-          if (import.meta.env.DEV) {
-            console.error("[DegreePlanView] Initial Load: No template could be loaded (neither saved nor default).");
-          }
+                  setDegreeTemplate(templateForProcessing);
+        setCurrentGlobalRules(globalRulesForProcessing);
+        setGrades(gradesForProcessing);
+        setClassificationChecked(classificationCheckedForProcessing);
+        setClassificationCredits(classificationCreditsForProcessing);
+        setBinaryStates(binaryStatesForProcessing);
+        
+        // Only show template selection if this is a first-time user with no saved plan
+        if (loadedFrom === 'default' && !currentUser) {
+          setShowTemplateSelection(true);
+          setIsSwitchingTemplate(false);
         }
+      } else {
+        if (import.meta.env.DEV) {
+          console.error("[DegreePlanView] Initial Load: No template could be loaded (neither saved nor default).");
+        }
+        // No template could be loaded - show template selection
+        setShowTemplateSelection(true);
+        setIsSwitchingTemplate(false);
+      }
   
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -1375,10 +1384,6 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         }
         setIsLoading(false);
         setIsInitialLoad(false);
-        if (!localStorage.getItem('hasSelectedTemplate')) {
-          setShowTemplateSelection(true);
-          setIsSwitchingTemplate(false);
-        }
       }
     };
   
