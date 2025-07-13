@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { RawCourseData } from '../../types/data';
 import BaseModal from './BaseModal';
 import { CourseSelectionModal } from './CourseSelectionModal';
+import { AlertModal } from './AlertModal';
+import { ConfirmModal } from './ConfirmModal';
 
 interface CourseListEditorModalProps {
   isOpen: boolean;
@@ -26,6 +28,16 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
   const [renamingListName, setRenamingListName] = useState<string | null>(null); // State for which list is being renamed
   const [editedListName, setEditedListName] = useState<string>(""); // State for the new name input during rename
   const [isCoursePickerModalOpen, setIsCoursePickerModalOpen] = useState<boolean>(false); // State for picker modal
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title?: string;
+    message: string;
+    type?: 'info' | 'success' | 'warning' | 'error';
+    buttonText?: string;
+  }>({ message: '' });
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [listToDelete, setListToDelete] = useState<string>('');
 
   useEffect(() => {
     if (isOpen) {
@@ -36,11 +48,9 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
       setEditedListName("");
       setIsCoursePickerModalOpen(false); // Ensure picker is closed when main modal opens/re-opens
     } else {
-        setEditableCourseLists({}); // Clear when closed
+      setEditableCourseLists({}); // Clear when closed
     }
   }, [isOpen, currentCourseLists]);
-
-  const listNames = Object.keys(editableCourseLists);
 
   const handleAddNewList = () => {
     const trimmedNewListName = newListName.trim();
@@ -51,9 +61,9 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
       }));
       setNewListName(""); // Clear input after adding
     } else if (trimmedNewListName in editableCourseLists) {
-      alert("שם רשימה כבר קיים."); // Alert if name already exists
+      showAlertMessage("שם רשימה כבר קיים.", 'error');
     } else {
-      alert("שם רשימה לא יכול להיות ריק.");
+      showAlertMessage("שם רשימה לא יכול להיות ריק.", 'error');
     }
   };
 
@@ -72,13 +82,13 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
     const trimmedEditedName = editedListName.trim();
 
     if (!trimmedEditedName) {
-      alert("שם רשימה לא יכול להיות ריק.");
+      showAlertMessage("שם רשימה לא יכול להיות ריק.", 'error');
       return;
     }
     // Allow renaming to the same name (effectively a no-op for name change)
     // Check for conflict only if the name actually changed to something that already exists
     if (trimmedEditedName !== renamingListName && (trimmedEditedName in editableCourseLists)) {
-      alert("שם רשימה אחרת כבר קיים עם שם זה.");
+      showAlertMessage("שם רשימה אחרת כבר קיים עם שם זה.", 'error');
       return;
     }
 
@@ -102,21 +112,11 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
 
   const handleDeleteList = (listNameToDelete: string) => {
     if (listNameToDelete === mandatoryCoursesListKey) {
-        alert("לא ניתן למחוק את רשימת קורסי החובה.");
+        showAlertMessage("לא ניתן למחוק את רשימת קורסי החובה.", 'error');
         return;
     }
-    if (window.confirm(`האם אתה בטוח שברצונך למחוק את הרשימה "${listNameToDelete}"?`)) {
-      setEditableCourseLists(prevLists => {
-        const newListData = { ...prevLists };
-        delete newListData[listNameToDelete];
-        return newListData;
-      });
-      if (selectedListName === listNameToDelete) {
-        setSelectedListName(null);
-        setRenamingListName(null); // Ensure rename state is also cleared if deleted list was being renamed
-        setEditedListName("");
-      }
-    }
+    setListToDelete(listNameToDelete);
+    setShowDeleteConfirm(true);
   };
 
   const handleRemoveCourseFromList = (courseIdToRemove: string) => {
@@ -136,12 +136,12 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
   const handleSelectCourseFromPickerModal = (selectedCourse: RawCourseData) => {
     if (!selectedListName) {
       // This should ideally not happen if the add button is disabled when no list is selected
-      alert("אנא בחר רשימה תחילה.");
+      showAlertMessage("אנא בחר רשימה תחילה.", 'warning');
       setIsCoursePickerModalOpen(false);
       return;
     }
     if (editableCourseLists[selectedListName]?.includes(selectedCourse._id)) {
-      alert("הקורס כבר קיים ברשימה זו.");
+      showAlertMessage("הקורס כבר קיים ברשימה זו.", 'warning');
       // We might want to keep the picker open or give other feedback
       // For now, just an alert, and it will close implicitly if not handled otherwise
     } else {
@@ -165,6 +165,11 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
   // In a later phase, onSave will call onSaveCourseLists(editableCourseLists)
   // For now, onClose is just onClose from props.
 
+  const showAlertMessage = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', title?: string) => {
+    setAlertConfig({ message, type, title });
+    setShowAlert(true);
+  };
+
   return (
     <BaseModal 
       isOpen={isOpen} 
@@ -177,9 +182,9 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
         <div className="w-1/3 border-l border-gray-200 dark:border-gray-700 pl-4 flex flex-col">
           <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-200">רשימות קיימות</h3>
           <div className="overflow-y-auto flex-grow">
-            {listNames.length > 0 ? (
+            {Object.keys(editableCourseLists).length > 0 ? (
               <ul className="space-y-1">
-                {listNames.map(name => (
+                {Object.keys(editableCourseLists).map(name => (
                   <li key={name}>
                     <button
                       onClick={() => {
@@ -325,6 +330,40 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
           customTitle={`הוסף קורס לרשימה: ${selectedListName}`}
         />
       )}
+      <AlertModal
+        isOpen={showAlert}
+        onClose={() => setShowAlert(false)}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttonText={alertConfig.buttonText}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setListToDelete('');
+        }}
+        title="מחיקת רשימה"
+        message={`האם אתה בטוח שברצונך למחוק את הרשימה "${listToDelete}"?`}
+        confirmText="מחק"
+        confirmVariant="danger"
+        onConfirm={() => {
+          setEditableCourseLists(prevLists => {
+            const newListData = { ...prevLists };
+            delete newListData[listToDelete];
+            return newListData;
+          });
+          if (selectedListName === listToDelete) {
+            setSelectedListName(null);
+            setRenamingListName(null); // Ensure rename state is also cleared if deleted list was being renamed
+            setEditedListName("");
+          }
+          setShowDeleteConfirm(false);
+          setListToDelete('');
+        }}
+      />
     </BaseModal>
   );
 };

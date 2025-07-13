@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ArrowUpTrayIcon, ArrowDownTrayIcon, ArrowsRightLeftIcon, ArrowLeftStartOnRectangleIcon, ArrowRightStartOnRectangleIcon } from '@heroicons/react/24/outline';
 import { UserCircleIcon } from '@heroicons/react/24/solid';
-import { ConfirmModal } from './ConfirmModal';
-import { User } from '@/types/user';
+import { User } from 'firebase/auth';
 
 interface AuthButtonsProps {
   onExportPlan: () => void;
@@ -43,10 +42,11 @@ const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan, o
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-    onImportPlan(file);
-    setIsDropdownOpen(false);
-    event.target.value = '';
+    if (file) {
+      onImportPlan(file);
+      setIsDropdownOpen(false);
+      event.target.value = '';
+    }
   };
 
   return (
@@ -74,33 +74,29 @@ const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan, o
               <p className="text-sm text-gray-500 dark:text-gray-400">מחובר כ: {currentUser.displayName || currentUser.email}</p>
             </div>
           )}
-          {onExportPlan && (
+          <button
+            onClick={handleExportPlan}
+            className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
+          >
+            <ArrowUpTrayIcon className="h-4 w-4 mr-2 inline" />
+            ייצא תכנית לימודים
+          </button>
+          <>
             <button
-              onClick={handleExportPlan}
+              onClick={handleImportClick}
               className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
             >
-              <ArrowUpTrayIcon className="h-4 w-4 mr-2 inline" />
-              ייצא תכנית לימודים
+              <ArrowDownTrayIcon className="h-4 w-4 mr-2 inline" />
+              ייבא תוכנית לימודים
             </button>
-          )}
-          {onImportPlan && (
-            <>
-              <button
-                onClick={handleImportClick}
-                className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
-              >
-                <ArrowDownTrayIcon className="h-4 w-4 mr-2 inline" />
-                ייבא תוכנית לימודים
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </>
-          )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </>
           <button
             onClick={onSwitchTemplate}
             className="block w-full text-right px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"

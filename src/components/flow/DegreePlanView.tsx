@@ -44,6 +44,7 @@ import { savePlanToFirestore, loadPlanFromFirestore } from '../../utils/firestor
 import AuthButtons from '../ui/AuthButtons';
 import { TemplateSelectionModal } from '../../components/ui/TemplateSelectionModal';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { AlertModal } from '../ui/AlertModal';
 
 const nodeTypes = {
   course: CourseNode,
@@ -637,6 +638,27 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   const [showDeleteSemesterConfirm, setShowDeleteSemesterConfirm] = useState(false);
   const [semesterToDelete, setSemesterToDelete] = useState<string | null>(null);
 
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title?: string;
+    message: string;
+    type?: 'info' | 'success' | 'warning' | 'error';
+    buttonText?: string;
+  }>({ message: '' });
+
+  const [showDeleteRuleConfirm, setShowDeleteRuleConfirm] = useState(false);
+  const [ruleToDelete, setRuleToDelete] = useState<string | null>(null);
+
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [importData, setImportData] = useState<{
+    degreeTemplate?: DegreeTemplate;
+    grades?: Record<string, string>;
+    classificationChecked?: Record<string, boolean>;
+    classificationCredits?: Record<string, number>;
+    binaryStates?: Record<string, boolean>;
+    exportDate?: string;
+  } | null>(null);
+
   const handleClassificationToggle = useCallback((courseId: string) => {
     setClassificationChecked(prev => {
       const newState = { ...prev, [courseId]: !prev[courseId] };
@@ -858,14 +880,9 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   }, [degreeTemplate, handleCloseRuleEditor]);
 
   const handleDeleteRule = useCallback((ruleId: string) => {
-    if (window.confirm("האם אתה בטוח שברצונך למחוק כלל זה?")) {
-      setDegreeTemplate(prevTemplate => {
-        if (!prevTemplate || !prevTemplate.rules) return prevTemplate;
-        const updatedRules = prevTemplate.rules.filter(r => r.id !== ruleId);
-        return { ...prevTemplate, rules: updatedRules };
-      });
-    }
-  }, [setDegreeTemplate]);
+    setRuleToDelete(ruleId);
+    setShowDeleteRuleConfirm(true);
+  }, []);
 
   const handleToggleCourseListEditorModal = useCallback(() => {
     setIsCourseListEditorOpen(prev => !prev);
@@ -971,7 +988,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   const handleExportPlan = useCallback(() => {
     if (!degreeTemplate) {
-      alert('אין תוכנית לימודים לייצוא');
+      showAlertMessage('אין תוכנית לימודים לייצוא', 'error');
       return;
     }
 
@@ -1003,35 +1020,20 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       try {
         const importedData = JSON.parse(e.target?.result as string);
         
-        // Validate the imported data structure
         if (!importedData.degreeTemplate) {
-          alert('קובץ לא תקין: חסרה תוכנית לימודים');
+          showAlertMessage('קובץ לא תקין: חסרה תוכנית לימודים', 'error');
           return;
         }
 
-        // Confirm import with user
-        const templateName = importedData.degreeTemplate.name || 'לא ידוע';
-        const exportDate = importedData.exportDate ? new Date(importedData.exportDate).toLocaleDateString('he-IL') : 'לא ידוע';
-        
-        if (!window.confirm(`האם אתה בטוח שברצונך לייבא את התוכנית "${templateName}" מתאריך ${exportDate}?\nפעולה זו תחליף את התוכנית הנוכחית.`)) {
-          return;
-        }
-
-        // Apply the imported data
-        setDegreeTemplate(importedData.degreeTemplate);
-        setGrades(importedData.grades || {});
-        setClassificationChecked(importedData.classificationChecked || {});
-        setClassificationCredits(importedData.classificationCredits || {});
-        setBinaryStates(importedData.binaryStates || {});
-        
-        alert(`התוכנית "${templateName}" יובאה בהצלחה!`);
+        setImportData(importedData);
+        setShowImportConfirm(true);
       } catch (error) {
         console.error('Error importing plan:', error);
-        alert('שגיאה בייבוא הקובץ: הקובץ פגום או לא תקין');
+        showAlertMessage('שגיאה בייבוא הקובץ: הקובץ פגום או לא תקין', 'error');
       }
     };
     reader.readAsText(file);
-  }, [setDegreeTemplate, setGrades, setClassificationChecked, setClassificationCredits, setBinaryStates]);
+  }, []);
 
   // Function to restore proper semester ordering after loading from Firestore
   const fixSemesterOrdering = (template: DegreeTemplate): DegreeTemplate => {
@@ -1595,6 +1597,11 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     localStorage.setItem('hasSelectedTemplate', 'true');
   }, [currentGlobalRules]);
 
+  const showAlertMessage = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', title?: string) => {
+    setAlertConfig({ message, type, title });
+    setShowAlert(true);
+  };
+
   return (
     <div style={{ width: '100%', height: '100%' }}>
       {/* Top-left: Logo */}
@@ -1753,8 +1760,62 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
           setShowDeleteSemesterConfirm(false);
           setSemesterToDelete(null);
         }}
+        confirmText="מחק בכל זאת"
+        confirmVariant="danger"
+      />
+      <AlertModal
+        isOpen={showAlert}
+        onClose={() => setShowAlert(false)}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttonText={alertConfig.buttonText}
+      />
+      <ConfirmModal
+        isOpen={showDeleteRuleConfirm}
+        onClose={() => {
+          setShowDeleteRuleConfirm(false);
+          setRuleToDelete(null);
+        }}
+        title="מחיקת כלל"
+        message="האם אתה בטוח שברצונך למחוק כלל זה?"
         confirmText="מחק"
-        cancelText="ביטול"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (ruleToDelete) {
+            setDegreeTemplate(prevTemplate => {
+              if (!prevTemplate || !prevTemplate.rules) return prevTemplate;
+              const updatedRules = prevTemplate.rules.filter(r => r.id !== ruleToDelete);
+              return { ...prevTemplate, rules: updatedRules };
+            });
+          }
+          setShowDeleteRuleConfirm(false);
+          setRuleToDelete(null);
+        }}
+      />
+      <ConfirmModal
+        isOpen={showImportConfirm}
+        onClose={() => {
+          setShowImportConfirm(false);
+          setImportData(null);
+        }}
+        title="ייבוא תוכנית"
+        message={importData ? `האם אתה בטוח שברצונך לייבא את התוכנית "${importData.degreeTemplate?.name || 'לא ידוע'}" מתאריך ${importData.exportDate ? new Date(importData.exportDate).toLocaleDateString('he-IL') : 'לא ידוע'}?\nפעולה זו תחליף את התוכנית הנוכחית.` : ''}
+        confirmText="ייבא"
+        confirmVariant="primary"
+        onConfirm={() => {
+          if (importData) {
+            setDegreeTemplate(importData.degreeTemplate);
+            setGrades(importData.grades || {});
+            setClassificationChecked(importData.classificationChecked || {});
+            setClassificationCredits(importData.classificationCredits || {});
+            setBinaryStates(importData.binaryStates || {});
+            
+            showAlertMessage(`התוכנית "${importData.degreeTemplate?.name || 'לא ידוע'}" יובאה בהצלחה!`, 'success');
+          }
+          setShowImportConfirm(false);
+          setImportData(null);
+        }}
       />
     </div>
   );
