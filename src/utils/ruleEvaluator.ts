@@ -214,6 +214,13 @@ export function evaluateRule(
     }
 
     case 'minCoursesFromMultipleLists': {
+      if (import.meta.env.DEV) {
+        console.debug(`[evaluateRule DEBUG] Evaluating 'minCoursesFromMultipleLists' for rule: "${rule.description || rule.id}"`);
+        console.debug(`[evaluateRule DEBUG]   rule.lists:`, rule.lists);
+        console.debug(`[evaluateRule DEBUG]   degreeCourseLists:`, degreeCourseLists);
+        console.debug(`[evaluateRule DEBUG]   degreeCourseLists keys:`, degreeCourseLists ? Object.keys(degreeCourseLists) : 'null/undefined');
+      }
+      
       if (rule.lists && Array.isArray(rule.lists) && degreeCourseLists) {
         let overallSatisfied = true;
         const progressStrings: string[] = [];
@@ -234,9 +241,19 @@ export function evaluateRule(
           let listSatisfied = false;
           let listProgressText = `${listName}: שגיאה`;
           
+          if (import.meta.env.DEV) {
+            console.debug(`[evaluateRule DEBUG]   Processing list: "${listName}", min: ${min}, minCredits: ${minCredits}`);
+            console.debug(`[evaluateRule DEBUG]   degreeCourseLists[${listName}]:`, degreeCourseLists[listName]);
+          }
+          
           if (listName && (min !== undefined || minCredits !== undefined) && Array.isArray(degreeCourseLists[listName])) {
             const listCourseIds = degreeCourseLists[listName] as string[];
             const coursesFromListInPlan = coursesInPlan.filter(cp => listCourseIds.includes(cp._id));
+            
+            if (import.meta.env.DEV) {
+              console.debug(`[evaluateRule DEBUG]     listCourseIds:`, listCourseIds);
+              console.debug(`[evaluateRule DEBUG]     coursesFromListInPlan:`, coursesFromListInPlan.map(c => ({ id: c._id, name: c.name, credits: c.credits })));
+            }
             
             if (minCredits !== undefined) {
               // Handle credit-based requirement
@@ -250,6 +267,21 @@ export function evaluateRule(
               listSatisfied = doneCredits >= minCredits;
               listProgressText = `${listName}: ${doneCredits}/${minCredits} נק"ז (מתוכנן: ${plannedCredits})`;
               detailsArray.push({ listName, currentValuePlanned: plannedCredits, currentValueDone: doneCredits, requiredValue: minCredits, isSatisfied: listSatisfied, unit: 'נק"ז' });
+
+              if (import.meta.env.DEV) {
+                console.debug(`[evaluateRule DEBUG]     Credit-based requirement:`);
+                console.debug(`[evaluateRule DEBUG]       plannedCredits: ${plannedCredits}`);
+                console.debug(`[evaluateRule DEBUG]       doneCredits: ${doneCredits}`);
+                console.debug(`[evaluateRule DEBUG]       minCredits: ${minCredits}`);
+                console.debug(`[evaluateRule DEBUG]       listSatisfied: ${listSatisfied}`);
+                console.debug(`[evaluateRule DEBUG]       Course details:`, coursesFromListInPlan.map(c => ({
+                  id: c._id,
+                  credits: c.credits,
+                  isDone: isCourseDone(c._id),
+                  grade: grades[c._id] || 'no grade',
+                  isBinary: binaryStates[c._id] || false
+                })));
+              }
 
               // For aggregate, we mix credits and courses, so use the requirement value
               aggregateDoneCourses += doneCredits;
@@ -302,8 +334,24 @@ export function evaluateRule(
         
         isSatisfied = overallSatisfied; // Satisfaction still depends on all lists meeting their individual 'min'
         listProgressDetails = detailsArray; // Keep the detailed breakdown
+        
+        if (import.meta.env.DEV) {
+          console.debug(`[evaluateRule DEBUG]   Final results for minCoursesFromMultipleLists:`);
+          console.debug(`[evaluateRule DEBUG]     currentValueDone: ${currentValueDone}`);
+          console.debug(`[evaluateRule DEBUG]     currentValuePlanned: ${currentValuePlanned}`);
+          console.debug(`[evaluateRule DEBUG]     requiredValue: ${requiredValue}`);
+          console.debug(`[evaluateRule DEBUG]     isSatisfied: ${isSatisfied}`);
+          console.debug(`[evaluateRule DEBUG]     currentProgressString: "${currentProgressString}"`);
+          console.debug(`[evaluateRule DEBUG]     listProgressDetails:`, listProgressDetails);
+        }
       } else {
         currentProgressString = `כלל 'minCoursesFromMultipleLists' לא הוגדר כראוי.`;
+        if (import.meta.env.DEV) {
+          console.debug(`[evaluateRule DEBUG]   minCoursesFromMultipleLists rule not properly defined`);
+          console.debug(`[evaluateRule DEBUG]     rule.lists exists: ${!!(rule.lists)}`);
+          console.debug(`[evaluateRule DEBUG]     rule.lists is array: ${Array.isArray(rule.lists)}`);
+          console.debug(`[evaluateRule DEBUG]     degreeCourseLists exists: ${!!(degreeCourseLists)}`);
+        }
       }
       break;
     }

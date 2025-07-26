@@ -624,6 +624,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
+  const [hasUserMadeChanges, setHasUserMadeChanges] = useState<boolean>(false);
   const autosaveTimeoutRef = useRef<number | null>(null);
   const classificationCreditsDebounceTimeoutRef = useRef<number | null>(null);
 
@@ -890,10 +891,15 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
 
   const handleSaveCourseLists = useCallback((allListsFromModal: Record<string, string[]>) => {
     if (import.meta.env.DEV) {
+      console.debug('[DegreePlanView handleSaveCourseLists] Called with lists:', Object.keys(allListsFromModal));
+      console.debug('[DegreePlanView handleSaveCourseLists] Current state - isInitialLoad:', isInitialLoad, 'isLoading:', isLoading);
       console.debug('[DegreePlanView handleSaveCourseLists] Received from modal:', JSON.parse(JSON.stringify(allListsFromModal)));
       console.debug('[DegreePlanView handleSaveCourseLists] MANDATORY_COURSES_LIST_KEY is:', MANDATORY_COURSES_LIST_KEY);
       console.debug('[DegreePlanView handleSaveCourseLists] Mandatory list from modal:', allListsFromModal[MANDATORY_COURSES_LIST_KEY]);
     }
+
+    // Mark that user has made changes to allow autosave even during initial load
+    setHasUserMadeChanges(true);
     setDegreeTemplate(prevTemplate => {
       if (!prevTemplate) {
         if (import.meta.env.DEV) console.warn('[DegreePlanView handleSaveCourseLists] prevTemplate is undefined');
@@ -927,7 +933,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       };
     });
     setIsCourseListEditorOpen(false);
-  }, [setDegreeTemplate, setIsCourseListEditorOpen]);
+  }, [setDegreeTemplate, setIsCourseListEditorOpen, isInitialLoad, isLoading, setHasUserMadeChanges]);
 
   const handleEditRule = useCallback((ruleId: string) => {
     if (!degreeTemplate || !degreeTemplate.rules) return;
@@ -962,6 +968,15 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   const handleSaveConsolidatedRules = useCallback((updatedRules: DegreeRule[]) => {
     if (!degreeTemplate) return;
 
+    if (import.meta.env.DEV) {
+      console.log('[handleSaveConsolidatedRules] Called with rules:', updatedRules.map(r => ({ id: r.id, type: r.type, description: r.description })));
+      console.log('[handleSaveConsolidatedRules] Current state - isInitialLoad:', isInitialLoad, 'isLoading:', isLoading);
+      console.log('[handleSaveConsolidatedRules] Current user:', !!currentUser, 'UID:', currentUser?.uid);
+    }
+
+    // Mark that user has made changes to allow autosave even during initial load
+    setHasUserMadeChanges(true);
+
     // Initialize rules array if it doesn't exist
     const currentRules = degreeTemplate.rules || [];
     
@@ -995,10 +1010,25 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     });
 
     const newDegreeTemplate = { ...degreeTemplate, rules: newRulesArray };
+    
+    if (import.meta.env.DEV) {
+      console.log('[handleSaveConsolidatedRules] About to save template with rules:');
+      console.log('[handleSaveConsolidatedRules] Original rules count:', currentRules.length);
+      console.log('[handleSaveConsolidatedRules] Updated rules count:', updatedRules.length);
+      console.log('[handleSaveConsolidatedRules] Final rules count:', newRulesArray.length);
+      console.log('[handleSaveConsolidatedRules] Final rule IDs:', newRulesArray.map(r => r.id));
+      console.log('[handleSaveConsolidatedRules] Final newDegreeTemplate object:', JSON.parse(JSON.stringify(newDegreeTemplate)));
+    }
+    
     setDegreeTemplate(newDegreeTemplate);
+    
+    if (import.meta.env.DEV) {
+      console.log('[handleSaveConsolidatedRules] setDegreeTemplate called. This should trigger autosave effect.');
+    }
+    
     setIsConsolidatedRuleEditorOpen(false);
     setRulesForConsolidatedEditing([]);
-  }, [degreeTemplate]);
+  }, [degreeTemplate, isInitialLoad, isLoading, currentUser, setHasUserMadeChanges]);
 
   const handleExportPlan = useCallback(() => {
     if (!degreeTemplate) {
@@ -1112,15 +1142,21 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   };
 
   useEffect(() => {
-    if (isLoading || !degreeTemplate || isInitialLoad) {
+    // Don't autosave during initial load unless user has made changes
+    if (isLoading || !degreeTemplate || (isInitialLoad && !hasUserMadeChanges)) {
       if (import.meta.env.DEV) {
-        console.log("[DegreePlanView] Autosave effect: Skipped due to guard conditions. isLoading:", isLoading, "degreeTemplate:", !!degreeTemplate, "isInitialLoad:", isInitialLoad);
+        console.log("[DegreePlanView] Autosave effect: Skipped due to guard conditions. isLoading:", isLoading, "degreeTemplate:", !!degreeTemplate, "isInitialLoad:", isInitialLoad, "hasUserMadeChanges:", hasUserMadeChanges);
+        if (degreeTemplate?.rules) {
+          console.log("[DegreePlanView] Autosave skipped but template has rules:", degreeTemplate.rules.map(r => r.id));
+        }
       }
       return;
     }
 
     if (import.meta.env.DEV) {
       console.log("[DegreePlanView] Autosave effect: Triggered! Current semesters:", Object.keys(degreeTemplate.semesters || {}));
+      console.log("[DegreePlanView] Autosave triggered with template rules:", degreeTemplate.rules?.map(r => r.id) || []);
+      console.log("[DegreePlanView] Autosave - degreeTemplate object hash:", JSON.stringify(degreeTemplate).substring(0, 100) + '...');
     }
 
     if (autosaveTimeoutRef.current) {
@@ -1138,6 +1174,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       if (currentUser && currentUser.uid) {
         if (import.meta.env.DEV) {
           console.log("[DegreePlanView] Autosaving plan to Firestore for user:", currentUser.uid);
+          console.log("[DegreePlanView] Autosave - Template rules being saved:", degreeTemplate.rules?.map(r => r.id) || []);
         }
         savePlanToFirestore(
           currentUser.uid,
@@ -1149,6 +1186,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         ).then(() => {
           if (import.meta.env.DEV) {
             console.log("[DegreePlanView] Firestore save completed successfully");
+            console.log("[DegreePlanView] Firestore save - Template rules that were saved:", degreeTemplate.rules?.map(r => r.id) || []);
           }
           setSaveStatus('saved');
         }).catch(error => {
@@ -1171,7 +1209,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, currentUser, authLoading, setSaveStatus, isLoading, isInitialLoad]);
+  }, [degreeTemplate, grades, classificationChecked, classificationCredits, binaryStates, currentUser, authLoading, setSaveStatus, isLoading, isInitialLoad, hasUserMadeChanges]);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -1238,13 +1276,18 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
               }
             }
             
-            // IMPORTANT: Always use fresh rules from template file, not from Firestore
-            // This ensures rules are up-to-date even if old patterns were saved
+            // Only use fresh rules if no rules exist or rules are empty, preserve user customizations
             if (templateForProcessing.id && fetchedDegreeFileData && fetchedDegreeFileData[templateForProcessing.id]) {
-              const freshTemplate = fetchedDegreeFileData[templateForProcessing.id] as DegreeTemplate;
-              templateForProcessing.rules = freshTemplate.rules; // Use fresh rules
-              if (import.meta.env.DEV) {
-                console.log(`[DegreePlanView] Initial Load: Merged fresh rules from template file for '${templateForProcessing.id}'`);
+              if (!templateForProcessing.rules || templateForProcessing.rules.length === 0) {
+                const freshTemplate = fetchedDegreeFileData[templateForProcessing.id] as DegreeTemplate;
+                templateForProcessing.rules = freshTemplate.rules;
+                if (import.meta.env.DEV) {
+                  console.log(`[DegreePlanView] Initial Load: Used fresh rules from template file for '${templateForProcessing.id}' (no existing rules)`);
+                }
+              } else {
+                if (import.meta.env.DEV) {
+                  console.log(`[DegreePlanView] Initial Load: Preserved user customized rules for '${templateForProcessing.id}' (${templateForProcessing.rules.length} rules)`);
+                }
               }
             }
             gradesForProcessing = firestorePlan.grades || {};
@@ -1311,13 +1354,18 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
                 console.debug('[DegreePlanView Initial Load] Local plan loaded, template.id AFTER potential fix:', templateForProcessing?.id);
             }
 
-            // IMPORTANT: Always use fresh rules from template file, not from local storage
-            // This ensures rules are up-to-date even if old patterns were saved
+            // Only use fresh rules if no rules exist or rules are empty, preserve user customizations
             if (templateForProcessing.id && fetchedDegreeFileData && fetchedDegreeFileData[templateForProcessing.id]) {
-              const freshTemplate = fetchedDegreeFileData[templateForProcessing.id] as DegreeTemplate;
-              templateForProcessing.rules = freshTemplate.rules; // Use fresh rules
-              if (import.meta.env.DEV) {
-                console.log(`[DegreePlanView] Initial Load: Merged fresh rules from template file for '${templateForProcessing.id}' (from local storage)`);
+              if (!templateForProcessing.rules || templateForProcessing.rules.length === 0) {
+                const freshTemplate = fetchedDegreeFileData[templateForProcessing.id] as DegreeTemplate;
+                templateForProcessing.rules = freshTemplate.rules;
+                if (import.meta.env.DEV) {
+                  console.log(`[DegreePlanView] Initial Load: Used fresh rules from template file for '${templateForProcessing.id}' (from local storage, no existing rules)`);
+                }
+              } else {
+                if (import.meta.env.DEV) {
+                  console.log(`[DegreePlanView] Initial Load: Preserved user customized rules for '${templateForProcessing.id}' from local storage (${templateForProcessing.rules.length} rules)`);
+                }
               }
             }
 
