@@ -228,15 +228,50 @@ const transformDataToNodes = (
 
   let currentRuleNodeDisplayIndex = 0;
 
-  // Add edit courses button node above rules, aligned to the right of consolidated general rules node
+  // Add edit courses button node above rules, aligned to the right of "קורסים מרשימות בחירה" rule
   if (onEditCoursesCallback) {
-    // Calculate position to align right edges with consolidated rules node (general academic progress)
-    // The consolidated node will be the last rule node (index 0 in xOffsetFactor)
-    const consolidatedRuleXOffset = 0; // Last rule node position
-    const consolidatedRuleX = (firstSemesterXPos - ruleNodeBaseXAdjustment) - consolidatedRuleXOffset * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
-    const consolidatedRuleRightEdge = consolidatedRuleX + COLUMN_WIDTH;
+    // Find the rule with "קורסים מרשימות בחירה" description to align with it
+    let targetRuleIndex = 0; // Default to consolidated rules position if not found
+    let targetRuleDescription = "התקדמות אקדמית כללית"; // Default description
+    
+    if (template.rules && Array.isArray(template.rules)) {
+      const otherRules = template.rules.filter(rule => {
+        const consolidatedRuleTypes = new Set([
+          'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
+          'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
+        ]);
+        return rule.type !== 'classification_courses' && !consolidatedRuleTypes.has(rule.type) && rule.id && rule.description;
+      });
+      
+      // Find the rule with "קורסים מרשימות בחירה" description
+      const selectiveListRuleIndex = otherRules.findIndex(rule => 
+        rule.description && rule.description.includes('קורסים מרשימות בחירה')
+      );
+      
+      if (selectiveListRuleIndex !== -1) {
+        // Calculate the display index for this rule
+        // Rules are displayed in reverse order, so we need to account for:
+        // 1. Classification rule (if exists)
+        // 2. Other rules (in reverse order)
+        // 3. Consolidated rules (if exists)
+        let ruleDisplayIndex = 0;
+        if (globalHasClassificationRule) ruleDisplayIndex++;
+        ruleDisplayIndex += (otherRules.length - 1 - selectiveListRuleIndex); // Reverse order
+        targetRuleIndex = totalRuleGroups - 1 - ruleDisplayIndex;
+        targetRuleDescription = "קורסים מרשימות בחירה";
+      }
+    }
+    
+    // Calculate position to align right edges with the target rule
+    const targetRuleXOffset = targetRuleIndex;
+    const targetRuleX = (firstSemesterXPos - ruleNodeBaseXAdjustment) - targetRuleXOffset * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
+    const targetRuleRightEdge = targetRuleX + COLUMN_WIDTH;
     const editButtonWidth = 200; // min-w-[200px] from EditCoursesNode
-    const editButtonX = consolidatedRuleRightEdge - editButtonWidth; // Align right edges
+    const editButtonX = targetRuleRightEdge - editButtonWidth; // Align right edges
+    
+    if (import.meta.env.DEV) {
+      console.log(`[transformDataToNodes] Edit button aligned with rule: "${targetRuleDescription}" at xOffset: ${targetRuleIndex}`);
+    }
     
     flowNodes.push({
       id: 'edit-courses-button',
