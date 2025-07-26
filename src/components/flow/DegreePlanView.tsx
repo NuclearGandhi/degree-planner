@@ -965,13 +965,27 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     // Initialize rules array if it doesn't exist
     const currentRules = degreeTemplate.rules || [];
     
+    // Define consolidated rule types that can be edited
+    const consolidatedRuleTypes = new Set([
+      'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
+      'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
+    ]);
+    
     const ruleMap = new Map(updatedRules.map(rule => [rule.id, rule]));
     const existingRuleIds = new Set(currentRules.map(rule => rule.id));
     
-    // Update existing rules and keep non-consolidated rules unchanged
-    const newRulesArray = currentRules.map(originalRule => 
-      ruleMap.has(originalRule.id) ? ruleMap.get(originalRule.id)! : originalRule
-    );
+    // Keep non-consolidated rules unchanged, and update/remove consolidated rules based on updatedRules
+    const newRulesArray = currentRules.filter(originalRule => {
+      // Keep non-consolidated rules
+      if (!consolidatedRuleTypes.has(originalRule.type)) {
+        return true;
+      }
+      // For consolidated rules, only keep those that still exist in updatedRules
+      return ruleMap.has(originalRule.id);
+    }).map(originalRule => {
+      // Update consolidated rules with new data if available
+      return ruleMap.has(originalRule.id) ? ruleMap.get(originalRule.id)! : originalRule;
+    });
     
     // Add completely new rules that weren't in the original rules array
     updatedRules.forEach(rule => {
