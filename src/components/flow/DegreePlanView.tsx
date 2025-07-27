@@ -103,6 +103,7 @@ const transformDataToNodes = (
   allTemplatesData: Record<string, DegreeTemplate> | null,
   onEditRuleCallback?: (ruleId: string) => void,
   onDeleteRuleCallback?: (ruleId: string) => void,
+  onSyncRulesCallback?: (ruleId: string) => void,
   onEditCoursesCallback?: () => void,
   onRemoveSemesterCallback?: (semesterKey: string) => void
 ): Node[] => {
@@ -378,6 +379,7 @@ const transformDataToNodes = (
       listProgressDetails: ruleStatus.listProgressDetails ?? undefined,
       onEditRule: () => onEditRuleCallback?.(rule.id),
       onDeleteRule: () => onDeleteRuleCallback?.(rule.id),
+      onSyncRules: () => onSyncRulesCallback?.(rule.id),
     };
 
     flowNodes.push({
@@ -440,6 +442,7 @@ const transformDataToNodes = (
         consolidatedRules: consolidatedRuleDetails,
         onEditRule: onEditRuleCallback,
         onDeleteRule: onDeleteRuleCallback,
+        onSyncRules: onSyncRulesCallback,
       };
       flowNodes.push({
         id: consolidatedNodeId,
@@ -685,6 +688,10 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   const [showDeleteRuleConfirm, setShowDeleteRuleConfirm] = useState(false);
   const [ruleToDelete, setRuleToDelete] = useState<string | null>(null);
 
+  const [showSyncRulesConfirm, setShowSyncRulesConfirm] = useState(false);
+  const [showSyncTemplateSelection, setShowSyncTemplateSelection] = useState(false);
+  const [selectedSyncTemplate, setSelectedSyncTemplate] = useState<DegreeTemplate | null>(null);
+
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importData, setImportData] = useState<{
     degreeTemplate?: DegreeTemplate;
@@ -919,6 +926,45 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     setRuleToDelete(ruleId);
     setShowDeleteRuleConfirm(true);
   }, []);
+
+  const handleSyncRules = useCallback(() => {
+    // Show template selection modal first
+    setShowSyncTemplateSelection(true);
+  }, []);
+
+  const handleConfirmSyncRules = useCallback(() => {
+    if (!selectedSyncTemplate) {
+      setAlertConfig({ message: "לא נבחרה תכנית לסנכרון", type: 'error' });
+      setShowAlert(true);
+      return;
+    }
+
+    try {
+      // Preserve current semester courses
+      const currentSemesters = degreeTemplate?.semesters || {};
+      
+      // Sync rules and course lists from selected template, but keep current semesters
+      const syncedTemplate: DegreeTemplate = {
+        ...selectedSyncTemplate,
+        semesters: currentSemesters // Preserve user's semester course selections
+      };
+
+      // Update the degree template with synced rules and lists but preserved semesters
+      setDegreeTemplate(syncedTemplate);
+      
+      // Mark that user has made changes to enable autosave
+      setHasUserMadeChanges(true);
+      
+      setShowSyncRulesConfirm(false);
+      setSelectedSyncTemplate(null);
+      setAlertConfig({ message: `כללים ורשימות סונכרנו בהצלחה מתכנית "${selectedSyncTemplate.name}"!`, type: 'success' });
+      setShowAlert(true);
+    } catch (error) {
+      console.error('Error during sync:', error);
+      setAlertConfig({ message: "שגיאה בסנכרון הכללים", type: 'error' });
+      setShowAlert(true);
+    }
+  }, [selectedSyncTemplate, degreeTemplate, setDegreeTemplate, setHasUserMadeChanges]);
 
   const handleToggleCourseListEditorModal = useCallback(() => {
     setIsCourseListEditorOpen(prev => !prev);
@@ -1621,6 +1667,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
       allTemplatesData,
       handleEditRule,
       handleDeleteRule,
+      handleSyncRules,
       handleToggleCourseListEditorModal,
       handleRemoveSemesterCallback
     );
@@ -1636,7 +1683,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
     classificationCredits, currentGlobalRules,
     handleAddCourseToSemesterCallback, handleAddSemesterCallback, handleGradeChange, 
     handleRemoveCourseCallback, handleBinaryChange, handleClassificationToggle, 
-    handleClassificationCreditsChange, handleEditRule, handleDeleteRule, handleToggleCourseListEditorModal,
+    handleClassificationCreditsChange, handleEditRule, handleDeleteRule, handleSyncRules, handleToggleCourseListEditorModal,
     handleRemoveSemesterCallback, setNodes, setEdges, isLoading, allTemplatesData
   ]);
 
@@ -1827,7 +1874,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
           setIsSwitchingTemplate(true);
           setShowTemplateSelection(true);
         }}
-        confirmText="החלף בכל זאת"
+        confirmText="המשך ללא ייצוא"
         onExport={handleExportPlan}
       />
       <ConfirmModal
@@ -1836,7 +1883,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
         message="התחברות תטען את התכנית מהענן, מה שעשוי למחוק שינויים מקומיים. האם לייצא קודם?"
         onConfirm={async () => { await signInWithGoogle(); }}
         onExport={handleExportPlan}
-        confirmText="התחבר בכל זאת"
+        confirmText="המשך ללא ייצוא"
       />
       <ConfirmModal
         isOpen={showDeleteSemesterConfirm}
@@ -1918,6 +1965,31 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
           setShowImportConfirm(false);
           setImportData(null);
         }}
+      />
+
+      {/* Sync Rules Template Selection Modal */}
+      <TemplateSelectionModal
+        isOpen={showSyncTemplateSelection}
+        onClose={() => setShowSyncTemplateSelection(false)}
+        templates={Object.values(allTemplatesData || {})}
+        onSelectTemplate={(template: DegreeTemplate) => {
+          setSelectedSyncTemplate(template);
+          setShowSyncTemplateSelection(false);
+          setShowSyncRulesConfirm(true);
+        }}
+        isSwitching={false}
+        customTitle="בחר תכנית לסנכרון כללים"
+        onExport={handleExportPlan}
+      />
+
+      {/* Sync Rules Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showSyncRulesConfirm}
+        onClose={() => setShowSyncRulesConfirm(false)}
+        message="סנכרון הכללים ירשום מחדש את כל הכללים והרשימות מהתכנית שנבחרה, אך ישמור על הקורסים בסמסטרים. האם להמשיך?"
+        onConfirm={handleConfirmSyncRules}
+        onExport={handleExportPlan}
+        confirmText="המשך ללא ייצוא"
       />
     </div>
   );

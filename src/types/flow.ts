@@ -92,6 +92,7 @@ export interface RuleNodeData {
   }[];
   onEditRule?: (ruleId: string) => void;
   onDeleteRule?: (ruleId: string) => void;
+  onSyncRules?: (ruleId: string) => void;
   [key: string]: unknown;
 }
 
