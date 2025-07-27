@@ -76,17 +76,17 @@ const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan, o
           )}
           <button
             onClick={handleExportPlan}
-            className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
+            className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
           >
-            <ArrowUpTrayIcon className="h-4 w-4 mr-2 inline" />
+            <ArrowUpTrayIcon className="h-4 w-4 inline" />
             ייצא תכנית לימודים
           </button>
           <>
             <button
               onClick={handleImportClick}
-              className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
+              className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
             >
-              <ArrowDownTrayIcon className="h-4 w-4 mr-2 inline" />
+              <ArrowDownTrayIcon className="h-4 w-4 inline" />
               ייבא תוכנית לימודים
             </button>
             <input
@@ -101,15 +101,15 @@ const AuthButtons: React.FC<AuthButtonsProps> = ({ onExportPlan, onImportPlan, o
             onClick={onSwitchTemplate}
             className="block w-full text-right px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
           >
-            <ArrowsRightLeftIcon className="h-4 w-4 mr-2 inline" />
+            <ArrowsRightLeftIcon className="h-4 w-4 inline" />
             החלף תכנית
           </button>
           {currentUser && (
             <button
               onClick={handleSignOut}
-              className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex items-center gap-2"
+              className="w-full text-right px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
             >
-              <ArrowLeftStartOnRectangleIcon className="h-4 w-4 mr-2 inline" />
+              <ArrowLeftStartOnRectangleIcon className="h-4 w-4 inline" />
               התנתק
             </button>
           )}
