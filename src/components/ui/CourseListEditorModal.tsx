@@ -184,7 +184,7 @@ const CourseListEditorModal: React.FC<CourseListEditorModalProps> = ({
           <div className="overflow-y-auto flex-grow">
             {Object.keys(editableCourseLists).length > 0 ? (
               <ul className="space-y-1">
-                {Object.keys(editableCourseLists).map(name => (
+                {Object.keys(editableCourseLists).sort((a, b) => a.localeCompare(b, 'he')).map(name => (
                   <li key={name}>
                     <button
                       onClick={() => {
