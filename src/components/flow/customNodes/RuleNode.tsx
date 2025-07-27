@@ -164,7 +164,7 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
             {data.onEditRule && (
               <button
                 onClick={() => data.onEditRule!(data.id)}
-                className="mr-2 p-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors duration-150 opacity-70 hover:opacity-100"
+                className="mr-2 p-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors duration-150"
                 title={`ערוך כלל: ${description}`}
                 aria-label={`ערוך כלל: ${description}`}
               >
@@ -175,7 +175,7 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
             {consolidatedRules && consolidatedRules.length > 0 && data.onSyncRules && (
               <button
                 onClick={() => data.onSyncRules!(data.id)}
-                className="mr-2 p-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors duration-150 opacity-70 hover:opacity-100"
+                className="mr-2 p-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors duration-150"
                 title="סנכרן כללים ורשימות מתבנית מקורית"
                 aria-label="סנכרן כללים ורשימות מתבנית מקורית"
               >
