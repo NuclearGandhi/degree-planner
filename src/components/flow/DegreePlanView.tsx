@@ -202,23 +202,7 @@ const transformDataToNodes = (
     CLASSIFICATION: { order: 3, width: 340 },      // פטורים - rightmost position
   } as const;
 
-  // Helper function to calculate rule position accounting for different widths
-  const calculateRulePosition = (ruleOrder: number): number => {
-    let totalOffset = 0;
-    
-    // Calculate offset by summing up widths and gaps of all rules to the right
-    const sortedRules = Object.entries(RULE_POSITIONS).sort((a, b) => a[1].order - b[1].order);
-    
-    for (const [, ruleInfo] of sortedRules) {
-      if (ruleInfo.order < ruleOrder) {
-        totalOffset += ruleInfo.width + HORIZONTAL_SPACING_RULE_GROUPS;
-      }
-    }
-    
-    return totalOffset;
-  };
-  
-  // Check what rule types exist
+  // Check what rule types exist first
   let globalHasClassificationRule = false;
   let templateHasConsolidatedGroup = false;
   
@@ -236,6 +220,106 @@ const transformDataToNodes = (
     templateHasConsolidatedGroup = template.rules.some(rule => 
       rule && consolidatedRuleTypes.has(rule.type)
     );
+  }
+
+  if (import.meta.env.DEV) {
+    console.debug('[Rule Detection] globalHasClassificationRule:', globalHasClassificationRule);
+    console.debug('[Rule Detection] templateHasConsolidatedGroup:', templateHasConsolidatedGroup);
+    console.debug('[Rule Detection] template.rules:', template.rules?.map(r => ({ id: r.id, type: r.type, description: r.description })));
+    console.debug('[Rule Detection] globalRules:', globalRules?.map(r => ({ id: r.id, type: r.type })));
+  }
+
+  // Helper function to determine what rules exist and their actual order and widths
+  const getActualRuleLayout = () => {
+    const ruleLayout: Array<{ order: number; width: number; key: string }> = [];
+    
+    // Add consolidated rule if it exists
+    if (templateHasConsolidatedGroup) {
+      ruleLayout.push({ order: 0, width: 400, key: 'consolidated' });
+    }
+    
+    // Check for selective lists rules
+    const hasSelectiveListsRule = template.rules?.some(rule => 
+      rule.description?.includes('קורסים מרשימות בחירה') || rule.type === 'minCoursesFromMultipleLists'
+    );
+    if (hasSelectiveListsRule) {
+      ruleLayout.push({ order: 1, width: 340, key: 'selective' });
+    }
+    
+    // Check for combined selective rules
+    const hasCombinedSelectiveRule = template.rules?.some(rule => 
+      rule.description?.includes('דרישות מרוכבות') || rule.type === 'minCreditsFromSelectedLists'
+    );
+    if (hasCombinedSelectiveRule) {
+      ruleLayout.push({ order: 2, width: 400, key: 'combined' });
+    }
+    
+    // Add classification rule if it exists
+    if (globalHasClassificationRule) {
+      ruleLayout.push({ order: 3, width: 340, key: 'classification' });
+    }
+    
+    const sortedLayout = ruleLayout.sort((a, b) => a.order - b.order);
+    
+    if (import.meta.env.DEV) {
+      console.debug(`[getActualRuleLayout] Detected rules:`, sortedLayout);
+    }
+    
+    return sortedLayout;
+  };
+
+  // Helper function to calculate where each rule's LEFT edge should be positioned
+  const calculateRulePosition = (ruleOrder: number): number => {
+    const actualRules = getActualRuleLayout();
+    
+    if (import.meta.env.DEV) {
+      console.debug(`[calculateRulePosition] For order ${ruleOrder}, actualRules:`, actualRules);
+    }
+    
+    // Calculate position by working backwards from the right
+    const currentRule = actualRules.find(r => r.order === ruleOrder);
+    if (!currentRule) {
+      if (import.meta.env.DEV) {
+        console.debug(`[calculateRulePosition] Rule not found for order ${ruleOrder}`);
+      }
+      return 0;
+    }
+    
+    // Start from the base position and work leftward
+    let rightEdgePosition = 0; // This will be relative to the base position
+    
+    // Calculate where this rule's right edge should be
+    for (const ruleInfo of actualRules) {
+      if (ruleInfo.order < ruleOrder) {
+        rightEdgePosition -= ruleInfo.width + HORIZONTAL_SPACING_RULE_GROUPS;
+        if (import.meta.env.DEV) {
+          console.debug(`[calculateRulePosition] Rule ${ruleInfo.key} pushes right edge left by ${ruleInfo.width + HORIZONTAL_SPACING_RULE_GROUPS}, now at: ${rightEdgePosition}`);
+        }
+      }
+    }
+    
+    // The left edge is the right edge minus this rule's width
+    const leftEdgeOffset = rightEdgePosition - currentRule.width;
+    
+    if (import.meta.env.DEV) {
+      console.debug(`[calculateRulePosition] Rule ${currentRule.key}: right edge at ${rightEdgePosition}, left edge at ${leftEdgeOffset} (width: ${currentRule.width})`);
+    }
+    
+    // Return the absolute offset from the base position
+    return Math.abs(leftEdgeOffset);
+  };
+
+  // Debug summary of expected rule bounds
+  if (import.meta.env.DEV) {
+    const allRuleLayout = getActualRuleLayout();
+    console.debug('\n=== EXPECTED RULE BOUNDS SUMMARY ===');
+    allRuleLayout.forEach(rule => {
+      const offset = calculateRulePosition(rule.order);
+      const baseX = firstSemesterXPos - ruleNodeBaseXAdjustment;
+      const finalX = baseX - offset;
+      console.debug(`${rule.key.toUpperCase()} (order ${rule.order}): x=${finalX}, bounds=[${finalX} to ${finalX + rule.width}], width=${rule.width}px`);
+    });
+    console.debug('=== END SUMMARY ===\n');
   }
 
   // Add edit courses button node above rules, aligned to the right of "קורסים מרשימות בחירה" rule
@@ -267,6 +351,14 @@ const transformDataToNodes = (
       const nodeId = `${GLOBAL_RULES_NODE_ID_PREFIX}${classificationRule.id}`;
       const xOffsetFactor = calculateRulePosition(RULE_POSITIONS.CLASSIFICATION.order);
       const nodePosition = { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor, y: ruleRowStartY };
+      
+      if (import.meta.env.DEV) {
+        console.debug('[Classification Rule] xOffsetFactor:', xOffsetFactor);
+        console.debug('[Classification Rule] firstSemesterXPos:', firstSemesterXPos);
+        console.debug('[Classification Rule] ruleNodeBaseXAdjustment:', ruleNodeBaseXAdjustment);
+        console.debug('[Classification Rule] Final position:', nodePosition);
+        console.debug('[Classification Rule] Expected bounds: left=' + nodePosition.x + ' right=' + (nodePosition.x + 340));
+      }
 
       const detailsForNode = classificationRule.courses.map(course => ({
         id: course.id,
@@ -334,8 +426,9 @@ const transformDataToNodes = (
       return calculateRulePosition(RULE_POSITIONS.COMBINED_SELECTIVE.order);
     }
     
-    // Default position for unrecognized rules (place them after combined selective)
-    return calculateRulePosition(RULE_POSITIONS.COMBINED_SELECTIVE.order) + RULE_POSITIONS.COMBINED_SELECTIVE.width + HORIZONTAL_SPACING_RULE_GROUPS;
+    // Default position for unrecognized rules - use a consistent order beyond classification
+    const defaultOrder = 4; // Place after classification (order 3)
+    return calculateRulePosition(defaultOrder);
   };
 
   otherRules.forEach((rule) => {
@@ -358,6 +451,16 @@ const transformDataToNodes = (
     maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeight);
 
     const xOffsetFactor = getRulePosition(rule);
+    
+    if (import.meta.env.DEV) {
+      const finalX = (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor;
+      const nodeWidth = rule.type === 'minCreditsFromSelectedLists' ? 400 : 340;
+      console.debug(`[Other Rule - ${rule.type}] Rule:`, { id: rule.id, type: rule.type, description: rule.description });
+      console.debug(`[Other Rule - ${rule.type}] xOffsetFactor:`, xOffsetFactor);
+      console.debug(`[Other Rule - ${rule.type}] Final position:`, { x: finalX, y: ruleRowStartY });
+      console.debug(`[Other Rule - ${rule.type}] Expected bounds: left=${finalX} right=${finalX + nodeWidth} width=${nodeWidth}`);
+    }
+    
     const ruleNodeData: RuleNodeData = {
       id: rule.id,
       description: rule.description || "כלל ללא תיאור",
@@ -375,16 +478,11 @@ const transformDataToNodes = (
       onSyncRules: () => onSyncRulesCallback?.(rule.id),
     };
 
-    // Calculate position adjustment for wider nodes
-    const isWideNode = rule.type === 'minCreditsFromSelectedLists';
-    const extraWidth = isWideNode ? 60 : 0; // 400px - 340px = 60px extra
-    const positionAdjustment = isWideNode ? -extraWidth / 2 : 0; // Center the wider node
-    
     flowNodes.push({
       id: nodeId,
       type: 'rule',
       position: { 
-        x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor + positionAdjustment, 
+        x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor, 
         y: ruleRowStartY 
       },
       data: ruleNodeData,
@@ -432,6 +530,16 @@ const transformDataToNodes = (
       maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeightConsolidated);
 
       const xOffsetFactor = calculateRulePosition(RULE_POSITIONS.CONSOLIDATED.order);
+      
+      if (import.meta.env.DEV) {
+        const finalX = (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor;
+        console.debug('[Consolidated Rule] xOffsetFactor:', xOffsetFactor);
+        console.debug('[Consolidated Rule] firstSemesterXPos:', firstSemesterXPos);
+        console.debug('[Consolidated Rule] ruleNodeBaseXAdjustment:', ruleNodeBaseXAdjustment);
+        console.debug('[Consolidated Rule] Final position:', { x: finalX, y: ruleRowStartY });
+        console.debug('[Consolidated Rule] Expected bounds: left=' + finalX + ' right=' + (finalX + 400));
+      }
+      
       const consolidatedNodeData: RuleNodeData = {
         id: consolidatedNodeId,
         description: "התקדמות אקדמית כללית",
