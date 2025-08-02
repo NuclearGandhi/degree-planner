@@ -355,6 +355,95 @@ export function evaluateRule(
       }
       break;
     }
+
+    case 'minCreditsFromSelectedLists': {
+      const unit = rule.requirementType === 'courses' ? 'קורסים' : 'נק"ז';
+      
+      if (import.meta.env.DEV) {
+        console.debug(`[evaluateRule DEBUG] Evaluating 'minCreditsFromSelectedLists' for rule: "${rule.description || rule.id}"`);
+        console.debug(`[evaluateRule DEBUG]   rule.selectedLists:`, rule.selectedLists);
+        console.debug(`[evaluateRule DEBUG]   rule.requirementType:`, rule.requirementType);
+        console.debug(`[evaluateRule DEBUG]   rule.min:`, rule.min);
+        console.debug(`[evaluateRule DEBUG]   degreeCourseLists:`, degreeCourseLists);
+      }
+      
+      if (rule.selectedLists && Array.isArray(rule.selectedLists) && rule.selectedLists.length > 0 && 
+          rule.min !== undefined && degreeCourseLists) {
+        
+        let totalPlanned = 0;
+        let totalDone = 0;
+        const detailsArray: NonNullable<EvaluatedRuleStatus['listProgressDetails']> = [];
+        
+        rule.selectedLists.forEach(listName => {
+          if (Array.isArray(degreeCourseLists[listName])) {
+            const listCourseIds = degreeCourseLists[listName] as string[];
+            const coursesFromListInPlan = coursesInPlan.filter(cp => listCourseIds.includes(cp._id));
+            
+            let listPlanned = 0;
+            let listDone = 0;
+            
+            if (rule.requirementType === 'courses') {
+              listPlanned = coursesFromListInPlan.length;
+              listDone = coursesFromListInPlan.filter(cp => isCourseDone(cp._id)).length;
+            } else {
+              // Default to credits
+              listPlanned = coursesFromListInPlan.reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+              listDone = coursesFromListInPlan
+                .filter(cp => isCourseDone(cp._id))
+                .reduce((sum, course) => sum + (Number(course.credits) || 0), 0);
+            }
+            
+            totalPlanned += listPlanned;
+            totalDone += listDone;
+            
+            detailsArray.push({
+              listName,
+              currentValuePlanned: listPlanned,
+              currentValueDone: listDone,
+              requiredValue: 0, // Individual lists don't have requirements in this rule type
+              isSatisfied: true, // Individual satisfaction doesn't matter here
+              unit
+            });
+            
+            if (import.meta.env.DEV) {
+              console.debug(`[evaluateRule DEBUG]   List "${listName}": planned=${listPlanned}, done=${listDone}, courses in plan:`, coursesFromListInPlan.map(c => c._id));
+            }
+          } else {
+            if (import.meta.env.DEV) {
+              console.debug(`[evaluateRule DEBUG]   List "${listName}" not found or not an array in degreeCourseLists`);
+            }
+          }
+        });
+        
+        requiredValue = rule.min;
+        currentValuePlanned = totalPlanned;
+        currentValueDone = totalDone;
+        isSatisfied = totalDone >= rule.min;
+        listProgressDetails = detailsArray;
+        
+        const listsText = rule.selectedLists.join(', ');
+        currentProgressString = `${totalDone}/${rule.min} ${unit} מרשימות ${listsText} (מתוכנן: ${totalPlanned})`;
+        
+        if (import.meta.env.DEV) {
+          console.debug(`[evaluateRule DEBUG]   Final results for minCreditsFromSelectedLists:`);
+          console.debug(`[evaluateRule DEBUG]     currentValueDone: ${currentValueDone}`);
+          console.debug(`[evaluateRule DEBUG]     currentValuePlanned: ${currentValuePlanned}`);
+          console.debug(`[evaluateRule DEBUG]     requiredValue: ${requiredValue}`);
+          console.debug(`[evaluateRule DEBUG]     isSatisfied: ${isSatisfied}`);
+          console.debug(`[evaluateRule DEBUG]     currentProgressString: "${currentProgressString}"`);
+        }
+      } else {
+        currentProgressString = `כלל 'minCreditsFromSelectedLists' לא הוגדר כראוי.`;
+        if (import.meta.env.DEV) {
+          console.debug(`[evaluateRule DEBUG]   minCreditsFromSelectedLists rule not properly defined`);
+          console.debug(`[evaluateRule DEBUG]     rule.selectedLists exists: ${!!(rule.selectedLists)}`);
+          console.debug(`[evaluateRule DEBUG]     rule.selectedLists is array: ${Array.isArray(rule.selectedLists)}`);
+          console.debug(`[evaluateRule DEBUG]     rule.min exists: ${rule.min !== undefined}`);
+          console.debug(`[evaluateRule DEBUG]     degreeCourseLists exists: ${!!(degreeCourseLists)}`);
+        }
+      }
+      break;
+    }
     
     // --- Other Rule Types (Keep as is for now or adapt if needed) ---
     case 'min_grade': {

@@ -33,6 +33,11 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
   const [selectedCourseListName, setSelectedCourseListName] = useState<string>('');
   const [listRuleNumericValue, setListRuleNumericValue] = useState<string | number>('');
   const [multiListItems, setMultiListItems] = useState<EditableListItem[]>([]);
+  
+  // New state for minCreditsFromSelectedLists rule type
+  const [selectedListsForSum, setSelectedListsForSum] = useState<string[]>([]);
+  const [sumRequirementType, setSumRequirementType] = useState<'credits' | 'courses'>('credits');
+  const [sumMinValue, setSumMinValue] = useState<string | number>('');
 
   useEffect(() => {
     if (rule) {
@@ -67,6 +72,10 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
           id: `item-${Date.now()}-${index}` 
         }));
         setMultiListItems(initialMultiListItems);
+      } else if (rule.type === 'minCreditsFromSelectedLists') {
+        setSelectedListsForSum(rule.selectedLists || []);
+        setSumRequirementType(rule.requirementType || 'credits');
+        setSumMinValue(rule.min || '');
       }
     } else {
       setDescription('');
@@ -75,6 +84,9 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
       setSelectedCourseListName(availableCourseListNames.length > 0 ? availableCourseListNames[0] : '');
       setListRuleNumericValue('');
       setMultiListItems([]);
+      setSelectedListsForSum([]);
+      setSumRequirementType('credits');
+      setSumMinValue('');
     }
   }, [rule, availableCourseListNames, isOpen]);
 
@@ -104,6 +116,8 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
     delete updatedRule.min_grade_value;
     delete updatedRule.course_list_name;
     delete updatedRule.lists; // Clear lists before potentially re-adding
+    delete updatedRule.selectedLists; // Clear selectedLists before potentially re-adding
+    delete updatedRule.requirementType; // Clear requirementType before potentially re-adding
 
     if (rule.type === 'total_credits') {
       updatedRule.required_credits = parseNumericState(generalRequiredCredits);
@@ -126,6 +140,10 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
         if (item.minCredits !== undefined) cleanItem.minCredits = item.minCredits;
         return cleanItem;
       });
+    } else if (rule.type === 'minCreditsFromSelectedLists') {
+      updatedRule.selectedLists = selectedListsForSum;
+      updatedRule.requirementType = sumRequirementType;
+      updatedRule.min = parseNumericState(sumMinValue);
     }
     // TODO: Add saving logic for other rule types
 
@@ -399,6 +417,111 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
             >
               הוסף דרישת רשימה +
             </button>
+          </div>
+        )}
+
+        {/* minCreditsFromSelectedLists */}
+        {rule.type === 'minCreditsFromSelectedLists' && (
+          <div className="mb-4 space-y-3">
+            <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 mb-2">דרישה מסכום רשימות:</h4>
+            
+            {/* Requirement Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                סוג הדרישה
+              </label>
+              <div className="flex gap-4 mb-2">
+                <label className="flex items-center cursor-pointer">
+                  <div className="relative ml-2">
+                    <input
+                      type="radio"
+                      name="sumRequirementType"
+                      checked={sumRequirementType === 'credits'}
+                      onChange={() => setSumRequirementType('credits')}
+                      className="sr-only"
+                    />
+                    <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
+                      sumRequirementType === 'credits'
+                        ? 'border-indigo-600 bg-indigo-600' 
+                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+                    }`}>
+                      {sumRequirementType === 'credits' && (
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-sm text-slate-700 dark:text-slate-300">נקודות זכות</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                  <div className="relative ml-2">
+                    <input
+                      type="radio"
+                      name="sumRequirementType"
+                      checked={sumRequirementType === 'courses'}
+                      onChange={() => setSumRequirementType('courses')}
+                      className="sr-only"
+                    />
+                    <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
+                      sumRequirementType === 'courses'
+                        ? 'border-indigo-600 bg-indigo-600' 
+                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+                    }`}>
+                      {sumRequirementType === 'courses' && (
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-sm text-slate-700 dark:text-slate-300">מספר קורסים</span>
+                </label>
+              </div>
+            </div>
+            
+            {/* Minimum Value Input */}
+            <div>
+              <label htmlFor="sumMinValue" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                {sumRequirementType === 'credits' ? 'מינימום נקודות זכות' : 'מינימום קורסים'}
+              </label>
+              <CustomNumberInput
+                id="sumMinValue"
+                value={sumMinValue}
+                onChange={setSumMinValue}
+                className="w-full"
+                inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+                min={0}
+                step={sumRequirementType === 'credits' ? 0.5 : 1}
+              />
+            </div>
+            
+            {/* List Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                בחר רשימות לחיבור
+              </label>
+              <div className="space-y-1 max-h-48 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-md p-2">
+                {availableCourseListNames.map(listName => (
+                  <label key={listName} className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedListsForSum.includes(listName)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedListsForSum(prev => [...prev, listName]);
+                        } else {
+                          setSelectedListsForSum(prev => prev.filter(name => name !== listName));
+                        }
+                      }}
+                      className="ml-2 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{listName}</span>
+                  </label>
+                ))}
+              </div>
+              {selectedListsForSum.length > 0 && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  נבחרו {selectedListsForSum.length} רשימות: {selectedListsForSum.join(', ')}
+                </p>
+              )}
+            </div>
           </div>
         )}
         

@@ -362,6 +362,8 @@ const transformDataToNodes = (
     let estimatedHeight = 120; 
     if (rule.type === 'minCoursesFromMultipleLists' && rule.lists) {
       estimatedHeight = 70 + (rule.lists.length * 50); 
+    } else if (rule.type === 'minCreditsFromSelectedLists' && rule.selectedLists) {
+      estimatedHeight = 70 + (rule.selectedLists.length * 35); // Slightly smaller since it's just a list display
     }
     maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeight);
 
@@ -374,8 +376,8 @@ const transformDataToNodes = (
       isSatisfied: ruleStatus.isSatisfied,
       listName: rule.listName || rule.course_list_name,
       minGrade: rule.min_grade_value,
-      minCourses: (rule.type === 'minCoursesFromList' || rule.type === 'minCoursesFromMultipleLists') ? rule.min : undefined,
-      minCredits: (rule.type === 'credits_from_list' || rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList' || rule.type === 'total_credits') ? (rule.min ?? rule.required_credits) : undefined,
+      minCourses: (rule.type === 'minCoursesFromList' || rule.type === 'minCoursesFromMultipleLists' || (rule.type === 'minCreditsFromSelectedLists' && rule.requirementType === 'courses')) ? rule.min : undefined,
+      minCredits: (rule.type === 'credits_from_list' || rule.type === 'minCredits' || rule.type === 'minCreditsFromMandatory' || rule.type === 'minCreditsFromAnySelectiveList' || rule.type === 'total_credits' || rule.type === 'minCreditsFromSelectedLists') ? (rule.min ?? rule.required_credits) : undefined,
       listProgressDetails: ruleStatus.listProgressDetails ?? undefined,
       onEditRule: () => onEditRuleCallback?.(rule.id),
       onDeleteRule: () => onDeleteRuleCallback?.(rule.id),

@@ -61,6 +61,14 @@
         ]
       },
       {
+        "id": "combined_selective_rule",
+        "description": "מינימום 14 נק\"ז מרשימות ב', ג' ו-ד'",
+        "type": "minCreditsFromSelectedLists",
+        "selectedLists": ["רשימה ב'", "רשימה ג'", "רשימה ד'"],
+        "requirementType": "credits",
+        "min": 14
+      },
+      {
         "id": "mandatory_credits_rule",
         "description": "נקודות חובה",
         "type": "minCreditsFromMandatory",
