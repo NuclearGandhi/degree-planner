@@ -12,6 +12,15 @@ interface EditableListItem {
   minCredits?: number;
 }
 
+// For minCreditsFromSelectedLists items during editing
+interface EditableCombinedRule {
+  id: string; // Temporary ID for React key
+  description: string;
+  selectedLists: string[];
+  requirementType: 'credits' | 'courses';
+  min: number;
+}
+
 interface RuleEditorModalProps {
   isOpen: boolean;
   rule: DegreeRule | null;
@@ -35,9 +44,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
   const [multiListItems, setMultiListItems] = useState<EditableListItem[]>([]);
   
   // New state for minCreditsFromSelectedLists rule type
-  const [selectedListsForSum, setSelectedListsForSum] = useState<string[]>([]);
-  const [sumRequirementType, setSumRequirementType] = useState<'credits' | 'courses'>('credits');
-  const [sumMinValue, setSumMinValue] = useState<string | number>('');
+  const [combinedRules, setCombinedRules] = useState<EditableCombinedRule[]>([]);
 
   useEffect(() => {
     if (rule) {
@@ -73,9 +80,11 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
         }));
         setMultiListItems(initialMultiListItems);
       } else if (rule.type === 'minCreditsFromSelectedLists') {
-        setSelectedListsForSum(rule.selectedLists || []);
-        setSumRequirementType(rule.requirementType || 'credits');
-        setSumMinValue(rule.min || '');
+        const initialCombinedRules = (rule.combinedRules || []).map((item, index) => ({
+          ...item,
+          id: `combined-${Date.now()}-${index}` 
+        }));
+        setCombinedRules(initialCombinedRules);
       }
     } else {
       setDescription('');
@@ -84,9 +93,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
       setSelectedCourseListName(availableCourseListNames.length > 0 ? availableCourseListNames[0] : '');
       setListRuleNumericValue('');
       setMultiListItems([]);
-      setSelectedListsForSum([]);
-      setSumRequirementType('credits');
-      setSumMinValue('');
+      setCombinedRules([]);
     }
   }, [rule, availableCourseListNames, isOpen]);
 
@@ -116,8 +123,7 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
     delete updatedRule.min_grade_value;
     delete updatedRule.course_list_name;
     delete updatedRule.lists; // Clear lists before potentially re-adding
-    delete updatedRule.selectedLists; // Clear selectedLists before potentially re-adding
-    delete updatedRule.requirementType; // Clear requirementType before potentially re-adding
+    delete updatedRule.combinedRules; // Clear combinedRules before potentially re-adding
 
     if (rule.type === 'total_credits') {
       updatedRule.required_credits = parseNumericState(generalRequiredCredits);
@@ -141,9 +147,17 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
         return cleanItem;
       });
     } else if (rule.type === 'minCreditsFromSelectedLists') {
-      updatedRule.selectedLists = selectedListsForSum;
-      updatedRule.requirementType = sumRequirementType;
-      updatedRule.min = parseNumericState(sumMinValue);
+      // Convert EditableCombinedRule back to the format expected by DegreeRule, removing temporary id
+      updatedRule.combinedRules = combinedRules.map((item) => {
+        // Remove undefined values and temporary id to keep the rule clean
+        const cleanItem: { description: string; selectedLists: string[]; requirementType: 'credits' | 'courses'; min: number } = {
+          description: item.description,
+          selectedLists: item.selectedLists,
+          requirementType: item.requirementType,
+          min: item.min
+        };
+        return cleanItem;
+      });
     }
     // TODO: Add saving logic for other rule types
 
@@ -423,105 +437,173 @@ const RuleEditorModal: React.FC<RuleEditorModalProps> = ({
         {/* minCreditsFromSelectedLists */}
         {rule.type === 'minCreditsFromSelectedLists' && (
           <div className="mb-4 space-y-3">
-            <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 mb-2">דרישה מסכום רשימות:</h4>
+            <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 mb-2">דרישות מסכום רשימות:</h4>
             
-            {/* Requirement Type Selection */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                סוג הדרישה
-              </label>
-              <div className="flex gap-4 mb-2">
-                <label className="flex items-center cursor-pointer">
-                  <div className="relative ml-2">
+            {combinedRules.map((combinedRule) => {
+              return (
+                <div key={combinedRule.id} className="p-3 border border-slate-200 dark:border-slate-600 rounded-md space-y-2">
+                  <div>
+                    <label htmlFor={`combinedRuleDesc-${combinedRule.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      תיאור הדרישה
+                    </label>
                     <input
-                      type="radio"
-                      name="sumRequirementType"
-                      checked={sumRequirementType === 'credits'}
-                      onChange={() => setSumRequirementType('credits')}
-                      className="sr-only"
-                    />
-                    <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
-                      sumRequirementType === 'credits'
-                        ? 'border-indigo-600 bg-indigo-600' 
-                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
-                    }`}>
-                      {sumRequirementType === 'credits' && (
-                        <div className="w-2 h-2 rounded-full bg-white"></div>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-sm text-slate-700 dark:text-slate-300">נקודות זכות</span>
-                </label>
-                <label className="flex items-center cursor-pointer">
-                  <div className="relative ml-2">
-                    <input
-                      type="radio"
-                      name="sumRequirementType"
-                      checked={sumRequirementType === 'courses'}
-                      onChange={() => setSumRequirementType('courses')}
-                      className="sr-only"
-                    />
-                    <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
-                      sumRequirementType === 'courses'
-                        ? 'border-indigo-600 bg-indigo-600' 
-                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
-                    }`}>
-                      {sumRequirementType === 'courses' && (
-                        <div className="w-2 h-2 rounded-full bg-white"></div>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-sm text-slate-700 dark:text-slate-300">מספר קורסים</span>
-                </label>
-              </div>
-            </div>
-            
-            {/* Minimum Value Input */}
-            <div>
-              <label htmlFor="sumMinValue" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                {sumRequirementType === 'credits' ? 'מינימום נקודות זכות' : 'מינימום קורסים'}
-              </label>
-              <CustomNumberInput
-                id="sumMinValue"
-                value={sumMinValue}
-                onChange={setSumMinValue}
-                className="w-full"
-                inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
-                min={0}
-                step={sumRequirementType === 'credits' ? 0.5 : 1}
-              />
-            </div>
-            
-            {/* List Selection */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                בחר רשימות לחיבור
-              </label>
-              <div className="space-y-1 max-h-48 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-md p-2">
-                {availableCourseListNames.map(listName => (
-                  <label key={listName} className="flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedListsForSum.includes(listName)}
+                      id={`combinedRuleDesc-${combinedRule.id}`}
+                      type="text"
+                      value={combinedRule.description}
                       onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedListsForSum(prev => [...prev, listName]);
-                        } else {
-                          setSelectedListsForSum(prev => prev.filter(name => name !== listName));
-                        }
+                        setCombinedRules(prev => prev.map(item => 
+                          item.id === combinedRule.id ? { ...item, description: e.target.value } : item
+                        ));
                       }}
-                      className="ml-2 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      className={commonInputClass}
+                      placeholder="תיאור הדרישה"
                     />
-                    <span className="text-sm text-slate-700 dark:text-slate-300">{listName}</span>
-                  </label>
-                ))}
-              </div>
-              {selectedListsForSum.length > 0 && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  נבחרו {selectedListsForSum.length} רשימות: {selectedListsForSum.join(', ')}
-                </p>
-              )}
-            </div>
+                  </div>
+                  
+                  {/* Requirement Type Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      סוג הדרישה
+                    </label>
+                    <div className="flex gap-4 mb-2">
+                      <label className="flex items-center cursor-pointer">
+                        <div className="relative ml-2">
+                          <input
+                            type="radio"
+                            name={`reqType-${combinedRule.id}`}
+                            checked={combinedRule.requirementType === 'credits'}
+                            onChange={() => {
+                              setCombinedRules(prev => prev.map(item => 
+                                item.id === combinedRule.id ? { ...item, requirementType: 'credits' } : item
+                              ));
+                            }}
+                            className="sr-only"
+                          />
+                          <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
+                            combinedRule.requirementType === 'credits'
+                              ? 'border-indigo-600 bg-indigo-600' 
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+                          }`}>
+                            {combinedRule.requirementType === 'credits' && (
+                              <div className="w-2 h-2 rounded-full bg-white"></div>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">נקודות זכות</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <div className="relative ml-2">
+                          <input
+                            type="radio"
+                            name={`reqType-${combinedRule.id}`}
+                            checked={combinedRule.requirementType === 'courses'}
+                            onChange={() => {
+                              setCombinedRules(prev => prev.map(item => 
+                                item.id === combinedRule.id ? { ...item, requirementType: 'courses' } : item
+                              ));
+                            }}
+                            className="sr-only"
+                          />
+                          <div className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center ${
+                            combinedRule.requirementType === 'courses'
+                              ? 'border-indigo-600 bg-indigo-600' 
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+                          }`}>
+                            {combinedRule.requirementType === 'courses' && (
+                              <div className="w-2 h-2 rounded-full bg-white"></div>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">מספר קורסים</span>
+                      </label>
+                    </div>
+                  </div>
+                  
+                  {/* Minimum Value Input */}
+                  <div>
+                    <label htmlFor={`combinedRuleMin-${combinedRule.id}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      {combinedRule.requirementType === 'credits' ? 'מינימום נקודות זכות' : 'מינימום קורסים'}
+                    </label>
+                    <CustomNumberInput
+                      id={`combinedRuleMin-${combinedRule.id}`}
+                      value={combinedRule.min}
+                      onChange={(val) => {
+                        setCombinedRules(prev => prev.map(item => 
+                          item.id === combinedRule.id ? { ...item, min: typeof val === 'string' ? parseFloat(val) || 0 : val } : item
+                        ));
+                      }}
+                      className="w-full"
+                      inputClassName={commonInputClass.replace('mt-1', '').replace('rounded-md', '').trim()}
+                      min={0}
+                      step={combinedRule.requirementType === 'credits' ? 0.5 : 1}
+                    />
+                  </div>
+                  
+                  {/* List Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      בחר רשימות לחיבור
+                    </label>
+                    <div className="space-y-1 max-h-32 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-md p-2">
+                      {availableCourseListNames.map(listName => (
+                        <label key={listName} className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={combinedRule.selectedLists.includes(listName)}
+                            onChange={(e) => {
+                              setCombinedRules(prev => prev.map(item => 
+                                item.id === combinedRule.id ? {
+                                  ...item,
+                                  selectedLists: e.target.checked 
+                                    ? [...item.selectedLists, listName]
+                                    : item.selectedLists.filter(name => name !== listName)
+                                } : item
+                              ));
+                            }}
+                            className="ml-2 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          />
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{listName}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {combinedRule.selectedLists.length > 0 && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        נבחרו {combinedRule.selectedLists.length} רשימות: {combinedRule.selectedLists.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setCombinedRules(prev => prev.filter(item => item.id !== combinedRule.id));
+                    }}
+                    className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    aria-label="הסר דרישה מרוכבת"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+            
+            <button 
+              type="button" 
+              onClick={() => {
+                setCombinedRules(prev => [...prev, {
+                  id: `new-combined-${Date.now()}`,
+                  description: '',
+                  selectedLists: [],
+                  requirementType: 'credits',
+                  min: 0
+                }]);
+              }}
+              className="mt-2 px-3 py-1.5 text-sm text-indigo-700 dark:text-indigo-300 border border-indigo-500 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
+            >
+              הוסף דרישה מרוכבת +
+            </button>
           </div>
         )}
         

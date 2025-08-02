@@ -59,9 +59,13 @@ export interface DegreeRule {
   // New fields for pattern-based rules
   id_pattern?: string; // Course ID pattern (e.g., "0324", "039")
   exclude_courses?: string[]; // Course IDs to exclude from pattern match
-  // New fields for minCreditsFromSelectedLists rule type
-  selectedLists?: string[]; // List names to sum credits/courses from
-  requirementType?: 'credits' | 'courses'; // Whether to count credits or courses
+  // New fields for minCreditsFromSelectedLists rule type (similar to lists structure)
+  combinedRules?: { 
+    description: string;
+    selectedLists: string[]; 
+    requirementType: 'credits' | 'courses'; 
+    min: number;
+  }[];
 }
 
 // Represents a degree template from degrees.json
