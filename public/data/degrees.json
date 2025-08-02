@@ -61,6 +61,18 @@
         ]
       },
       {
+        "id": "mandatory_credits_rule",
+        "description": "נקודות חובה",
+        "type": "minCreditsFromMandatory",
+        "min": 109.5
+      },
+      {
+        "id": "selective_credits_rule",
+        "description": "נקודות בחירה",
+        "type": "minCreditsFromAnySelectiveList",
+        "min": 30
+      },
+      {
         "id": "combined_selective_rule",
         "description": "דרישות מרוכבות מרשימות בחירה",
         "type": "minCreditsFromSelectedLists",
@@ -78,18 +90,6 @@
             "min": 3
           }
         ]
-      },
-      {
-        "id": "mandatory_credits_rule",
-        "description": "נקודות חובה",
-        "type": "minCreditsFromMandatory",
-        "min": 109.5
-      },
-      {
-        "id": "selective_credits_rule",
-        "description": "נקודות בחירה",
-        "type": "minCreditsFromAnySelectiveList",
-        "min": 30
       },
       {
         "id": "humanitarian_courses_rule",

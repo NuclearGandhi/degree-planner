@@ -37,6 +37,7 @@ export interface ClassificationCourseDetail {
 export interface RuleNodeData {
   id: string;
   description: string;
+  type?: string;
   currentProgress?: number | string | null;
   targetProgress?: number | null;
   isSatisfied: boolean;

@@ -152,8 +152,11 @@ const RuleNode: React.FC<NodeProps<RFNode<RuleNodeData, 'rule'>>> = ({ data }) =
   // Percentage for the part that is planned but not yet done
   const percentPlannedNotDone = showProgressBar ? Math.min(100 - percentDone, Math.max(0, ((plannedValNum - doneValNum) / requiredValNum) * 100)) : 0;
 
+  // Determine width based on rule type
+  const nodeWidth = data.type === 'minCreditsFromSelectedLists' ? 'w-[400px]' : 'w-[340px]';
+
   return (
-    <div dir="rtl" className={`rule-node p-3 border-r-4 rounded-md shadow-lg w-[340px] min-h-[140px] ${statusColor} flex flex-col justify-between`}> {/* Width increased to 340px */}
+    <div dir="rtl" className={`rule-node p-3 border-r-4 rounded-md shadow-lg ${nodeWidth} min-h-[140px] ${statusColor} flex flex-col justify-between`}> {/* Conditional width */}
       <div> {/* Added a wrapper div for main content */}
         {/* Title Section: Use flex, justify-end for RTL alignment */}
         <div className="flex items-center justify-start mb-2">

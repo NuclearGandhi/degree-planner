@@ -371,6 +371,7 @@ const transformDataToNodes = (
     const ruleNodeData: RuleNodeData = {
       id: rule.id,
       description: rule.description || "כלל ללא תיאור",
+      type: rule.type,
       currentProgress: ruleStatus.currentProgressString,
       targetProgress: ruleStatus.requiredValue,
       isSatisfied: ruleStatus.isSatisfied,
@@ -384,10 +385,18 @@ const transformDataToNodes = (
       onSyncRules: () => onSyncRulesCallback?.(rule.id),
     };
 
+    // Calculate position adjustment for wider nodes
+    const isWideNode = rule.type === 'minCreditsFromSelectedLists';
+    const extraWidth = isWideNode ? 60 : 0; // 400px - 340px = 60px extra
+    const positionAdjustment = isWideNode ? -extraWidth / 2 : 0; // Center the wider node
+    
     flowNodes.push({
       id: nodeId,
       type: 'rule',
-      position: { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY },
+      position: { 
+        x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER) + positionAdjustment, 
+        y: ruleRowStartY 
+      },
       data: ruleNodeData,
     });
     currentRuleNodeDisplayIndex++;
@@ -437,6 +446,7 @@ const transformDataToNodes = (
       const consolidatedNodeData: RuleNodeData = {
         id: consolidatedNodeId,
         description: "התקדמות אקדמית כללית",
+        type: "consolidated",
         isSatisfied: allConsolidatedSatisfied,
         currentProgress: `${consolidatedRuleDetails.filter(r => r.isSatisfied).length} / ${consolidatedRuleDetails.length} תתי-כללים הושלמו`,
         targetProgress: consolidatedRuleDetails.length,
