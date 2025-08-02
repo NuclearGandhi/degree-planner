@@ -82,12 +82,6 @@
             "selectedLists": ["רשימה ב'", "רשימה ג'", "רשימה ד'"],
             "requirementType": "credits",
             "min": 14
-          },
-          {
-            "description": "מינימום 3 קורסים מרשימות א' ו-ה'",
-            "selectedLists": ["רשימה א'", "רשימה ה'"],
-            "requirementType": "courses",
-            "min": 3
           }
         ]
       },

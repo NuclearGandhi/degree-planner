@@ -59,6 +59,7 @@ const COLUMN_WIDTH = 340;
 const NODE_HEIGHT_COURSE = 90;
 const VERTICAL_SPACING_RULE = 60;
 const HORIZONTAL_SPACING_SEMESTER = 75;
+const HORIZONTAL_SPACING_RULE_GROUPS = 45; // Smaller spacing between rule groups
 const SEMESTER_TOP_MARGIN = 120;
 const ADD_SEMESTER_NODE_ID = 'add-new-semester-button';
 const MAX_SEMESTERS = 16;
@@ -192,15 +193,38 @@ const transformDataToNodes = (
   const firstSemesterXPos = baseSemesterAreaStartX + (maxSemesterNum > 0 ? (maxSemesterNum - 1) : 0) * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
 
   const ruleNodeBaseXAdjustment = 98;
-  let totalRuleGroups = 0;
-  const templateOtherRulesForCount: DegreeRule[] = [];
-  let templateHasConsolidatedGroup = false;
-  let globalHasClassificationRule = false;
+  
+  // Hard-coded rule positioning constants with width information
+  const RULE_POSITIONS = {
+    CONSOLIDATED: { order: 0, width: 400 },        // התקדמות אקדמית כללית - leftmost position, wider
+    SELECTIVE_LISTS: { order: 1, width: 340 },     // קורסים מרשימות בחירה
+    COMBINED_SELECTIVE: { order: 2, width: 400 },  // דרישות מרוכבות מרשימות בחירה - wider
+    CLASSIFICATION: { order: 3, width: 340 },      // פטורים - rightmost position
+  } as const;
 
+  // Helper function to calculate rule position accounting for different widths
+  const calculateRulePosition = (ruleOrder: number): number => {
+    let totalOffset = 0;
+    
+    // Calculate offset by summing up widths and gaps of all rules to the right
+    const sortedRules = Object.entries(RULE_POSITIONS).sort((a, b) => a[1].order - b[1].order);
+    
+    for (const [, ruleInfo] of sortedRules) {
+      if (ruleInfo.order < ruleOrder) {
+        totalOffset += ruleInfo.width + HORIZONTAL_SPACING_RULE_GROUPS;
+      }
+    }
+    
+    return totalOffset;
+  };
+  
+  // Check what rule types exist
+  let globalHasClassificationRule = false;
+  let templateHasConsolidatedGroup = false;
+  
   if (Array.isArray(globalRules)) {
     if (globalRules.some(rule => rule.type === 'classification_courses')) {
       globalHasClassificationRule = true;
-      totalRuleGroups++;
     }
   }
 
@@ -209,69 +233,22 @@ const transformDataToNodes = (
       'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
       'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
     ]);
-    let tempConsolidatedExists = false;
-    template.rules.forEach(rule => {
-      if (!rule || typeof rule.id === 'undefined' || typeof rule.description === 'undefined') return;
-      if (rule.type === 'classification_courses') return;
-
-      if (consolidatedRuleTypes.has(rule.type)) {
-        tempConsolidatedExists = true;
-      } else {
-        templateOtherRulesForCount.push(rule);
-      }
-    });
-    if (tempConsolidatedExists) {
-      templateHasConsolidatedGroup = true;
-      totalRuleGroups++;
-    }
-    totalRuleGroups += templateOtherRulesForCount.length;
+    templateHasConsolidatedGroup = template.rules.some(rule => 
+      rule && consolidatedRuleTypes.has(rule.type)
+    );
   }
-
-  let currentRuleNodeDisplayIndex = 0;
 
   // Add edit courses button node above rules, aligned to the right of "קורסים מרשימות בחירה" rule
   if (onEditCoursesCallback) {
-    // Find the rule with "קורסים מרשימות בחירה" description to align with it
-    let targetRuleIndex = 0; // Default to consolidated rules position if not found
-    let targetRuleDescription = "התקדמות אקדמית כללית"; // Default description
-    
-    if (template.rules && Array.isArray(template.rules)) {
-      const otherRules = template.rules.filter(rule => {
-        const consolidatedRuleTypes = new Set([
-          'total_credits', 'credits_from_list', 'min_grade', 'minCredits',
-          'minCoursesFromList', 'minCreditsFromMandatory', 'minCreditsFromAnySelectiveList', 'minCreditsFromIdPattern'
-        ]);
-        return rule.type !== 'classification_courses' && !consolidatedRuleTypes.has(rule.type) && rule.id && rule.description;
-      });
-      
-      // Find the rule with "קורסים מרשימות בחירה" description
-      const selectiveListRuleIndex = otherRules.findIndex(rule => 
-        rule.description && rule.description.includes('קורסים מרשימות בחירה')
-      );
-      
-      if (selectiveListRuleIndex !== -1) {
-        // Calculate the display index for this rule
-        // Rules are displayed in reverse order, so we need to account for:
-        // 1. Classification rule (if exists)
-        // 2. Other rules (in reverse order)
-        // 3. Consolidated rules (if exists)
-        let ruleDisplayIndex = 0;
-        if (globalHasClassificationRule) ruleDisplayIndex++;
-        ruleDisplayIndex += (otherRules.length - 1 - selectiveListRuleIndex); // Reverse order
-        targetRuleIndex = totalRuleGroups - 1 - ruleDisplayIndex;
-        targetRuleDescription = "קורסים מרשימות בחירה";
-      }
-    }
-    
-    // Calculate position to align right edges with the target rule
-    const targetRuleXOffset = targetRuleIndex;
-    const targetRuleX = (firstSemesterXPos - ruleNodeBaseXAdjustment) - targetRuleXOffset * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER);
-    const targetRuleRightEdge = targetRuleX + COLUMN_WIDTH;
+    // Hard-coded position for selective lists rule
+    const targetRuleXOffset = calculateRulePosition(RULE_POSITIONS.SELECTIVE_LISTS.order);
+    const targetRuleX = (firstSemesterXPos - ruleNodeBaseXAdjustment) - targetRuleXOffset;
+    const targetRuleRightEdge = targetRuleX + RULE_POSITIONS.SELECTIVE_LISTS.width;
     const editButtonWidth = 200; // min-w-[200px] from EditCoursesNode
     const editButtonX = targetRuleRightEdge - editButtonWidth; // Align right edges
     
     if (import.meta.env.DEV) {
-      console.log(`[transformDataToNodes] Edit button aligned with rule: "${targetRuleDescription}" at xOffset: ${targetRuleIndex}`);
+      console.log(`[transformDataToNodes] Edit button aligned with selective lists rule at position: ${RULE_POSITIONS.SELECTIVE_LISTS.order}`);
     }
     
     flowNodes.push({
@@ -288,8 +265,8 @@ const transformDataToNodes = (
     const classificationRule = globalRules.find(rule => rule.type === 'classification_courses');
     if (classificationRule && classificationRule.courses) {
       const nodeId = `${GLOBAL_RULES_NODE_ID_PREFIX}${classificationRule.id}`;
-      const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
-      const nodePosition = { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY };
+      const xOffsetFactor = calculateRulePosition(RULE_POSITIONS.CLASSIFICATION.order);
+      const nodePosition = { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor, y: ruleRowStartY };
 
       const detailsForNode = classificationRule.courses.map(course => ({
         id: course.id,
@@ -317,7 +294,6 @@ const transformDataToNodes = (
         position: nodePosition,
         data: classificationNodeData,
       });
-      currentRuleNodeDisplayIndex++;
     }
   }
 
@@ -348,6 +324,20 @@ const transformDataToNodes = (
     effectiveMandatoryCourseIds = [];
   }
 
+  // Helper function to determine rule position based on type and description
+  const getRulePosition = (rule: DegreeRule): number => {
+    // Check by description patterns first (more specific)
+    if (rule.description?.includes('קורסים מרשימות בחירה') || rule.type === 'minCoursesFromMultipleLists') {
+      return calculateRulePosition(RULE_POSITIONS.SELECTIVE_LISTS.order);
+    }
+    if (rule.description?.includes('דרישות מרוכבות') || rule.type === 'minCreditsFromSelectedLists') {
+      return calculateRulePosition(RULE_POSITIONS.COMBINED_SELECTIVE.order);
+    }
+    
+    // Default position for unrecognized rules (place them after combined selective)
+    return calculateRulePosition(RULE_POSITIONS.COMBINED_SELECTIVE.order) + RULE_POSITIONS.COMBINED_SELECTIVE.width + HORIZONTAL_SPACING_RULE_GROUPS;
+  };
+
   otherRules.forEach((rule) => {
     const ruleStatus = evaluateRule(
       rule, coursesInCurrentPlan, currentGrades, 
@@ -367,7 +357,7 @@ const transformDataToNodes = (
     }
     maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeight);
 
-    const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
+    const xOffsetFactor = getRulePosition(rule);
     const ruleNodeData: RuleNodeData = {
       id: rule.id,
       description: rule.description || "כלל ללא תיאור",
@@ -394,12 +384,11 @@ const transformDataToNodes = (
       id: nodeId,
       type: 'rule',
       position: { 
-        x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER) + positionAdjustment, 
+        x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor + positionAdjustment, 
         y: ruleRowStartY 
       },
       data: ruleNodeData,
     });
-    currentRuleNodeDisplayIndex++;
   });
 
   if (templateHasConsolidatedGroup) {
@@ -442,7 +431,7 @@ const transformDataToNodes = (
       const estimatedHeightConsolidated = 90 + consolidatedRuleDetails.length * 60; // Increased from 60 to 90 to account for legend on separate line
       maxEstimatedRuleHeight = Math.max(maxEstimatedRuleHeight, estimatedHeightConsolidated);
 
-      const xOffsetFactor = totalRuleGroups - 1 - currentRuleNodeDisplayIndex;
+      const xOffsetFactor = calculateRulePosition(RULE_POSITIONS.CONSOLIDATED.order);
       const consolidatedNodeData: RuleNodeData = {
         id: consolidatedNodeId,
         description: "התקדמות אקדמית כללית",
@@ -459,10 +448,9 @@ const transformDataToNodes = (
       flowNodes.push({
         id: consolidatedNodeId,
         type: 'rule',
-        position: { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor * (COLUMN_WIDTH + HORIZONTAL_SPACING_SEMESTER), y: ruleRowStartY },
+        position: { x: (firstSemesterXPos - ruleNodeBaseXAdjustment) - xOffsetFactor, y: ruleRowStartY },
         data: consolidatedNodeData,
       });
-      currentRuleNodeDisplayIndex++;
     }
   }
 
@@ -572,11 +560,8 @@ const transformDataToNodes = (
     });
   }
 
-  if (currentRuleNodeDisplayIndex > 0) {
-    currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
-  } else {
-    currentContentY = Math.max(currentContentY, SEMESTER_TOP_MARGIN);
-  }
+  // Set content Y position after rules
+  currentContentY = ruleRowStartY + maxEstimatedRuleHeight + SEMESTER_TOP_MARGIN;
 
   return flowNodes;
 };
