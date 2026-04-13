@@ -11,6 +11,11 @@
           "id": "miluim_exemption",
           "name": "פטור מילואים",
           "creditInput": {"max": 10, "step": 0.5}
+        },
+        {
+          "id": "general_exemption",
+          "name": "פטור כללי (מתמטיקה, בגרויות וכו')",
+          "creditInput": {"max": 3, "step": 0.5}
         }
       ]
     }
@@ -306,6 +311,20 @@
         "description": "נקודות בחירה",
         "type": "minCreditsFromAnySelectiveList",
         "min": 30
+      },
+      {
+        "id": "project_rule",
+        "description": "פרויקט גמר",
+        "type": "credits_from_list",
+        "course_list_name": "פרויקט",
+        "required_credits": 6
+      },
+      {
+        "id": "labs_rule",
+        "description": "מעבדות",
+        "type": "minCoursesFromList",
+        "listName": "מעבדות",
+        "min": 3
       }
     ],
     "courses-lists": {
@@ -489,6 +508,17 @@
         "00470003",
         "00470004",
         "00470006"
+      ],
+      "פרויקט": [
+        "00440167",
+        "00440169"
+      ],
+      "מעבדות": [
+        "00450001",
+        "00450002",
+        "00450003",
+        "00450004",
+        "00450005"
       ]
     }
   }

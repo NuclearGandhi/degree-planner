@@ -162,18 +162,19 @@ export function evaluateRule(
         console.debug(`[evaluateRule DEBUG]   RequiredValue: ${requiredValue}`);
       }
 
-      // Apply miluim exemptions if applicable for total_credits or minCreditsFromAnySelectiveList
+      // Apply credit exemptions if applicable for total_credits or minCreditsFromAnySelectiveList
       if (
         (rule.type === 'total_credits' || rule.type === 'minCreditsFromAnySelectiveList') &&
-        classificationChecked && classificationCredits &&
-        classificationChecked['miluim_exemption'] && 
-        typeof classificationCredits['miluim_exemption'] === 'number'
+        classificationChecked && classificationCredits
       ) {
-        const miluimExemptionVal = classificationCredits['miluim_exemption'];
-        if (currentValueDone !== null) currentValueDone += miluimExemptionVal;
-        if (currentValuePlanned !== null) currentValuePlanned += miluimExemptionVal;
+        for (const exemptionId of ['miluim_exemption', 'general_exemption']) {
+          if (classificationChecked[exemptionId] && typeof classificationCredits[exemptionId] === 'number') {
+            const exemptionVal = classificationCredits[exemptionId];
+            if (currentValueDone !== null) currentValueDone += exemptionVal;
+            if (currentValuePlanned !== null) currentValuePlanned += exemptionVal;
+          }
+        }
       }
-      // TODO: Consider if other classificationChecked items should contribute to other rule types.
       
       // Finalize calculations for satisfaction and progress string
       if (requiredValue !== null && currentValueDone !== null) {

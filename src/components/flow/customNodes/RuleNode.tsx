@@ -81,7 +81,7 @@ const ClassificationItemRow: React.FC<ClassificationItemRowProps> = ({
         />
         <label
           htmlFor={`classification-${item.id}`}
-          className={`text-sm font-medium ${isExemptionNode && item.id === 'miluim_exemption' ? textColor : (item.checked ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300') }`}
+          className={`text-sm font-medium ${isExemptionNode && (item.id === 'miluim_exemption' || item.id === 'general_exemption') ? textColor : (item.checked ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300') }`}
         >
           {item.name}
         </label>

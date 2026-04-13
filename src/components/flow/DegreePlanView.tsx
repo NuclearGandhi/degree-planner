@@ -810,7 +810,7 @@ function DegreePlanView({ allTemplatesData }: DegreePlanViewProps) {
   const handleClassificationToggle = useCallback((courseId: string) => {
     setClassificationChecked(prev => {
       const newState = { ...prev, [courseId]: !prev[courseId] };
-      if (courseId === 'miluim_exemption' && !newState[courseId]) {
+      if ((courseId === 'miluim_exemption' || courseId === 'general_exemption') && !newState[courseId]) {
         setClassificationCredits(creditPrev => ({ ...creditPrev, [courseId]: 0 }));
       }
       return newState;
